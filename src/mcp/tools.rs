@@ -144,11 +144,12 @@ mod tests {
     #[test]
     fn test_parse_merchant_url_requires_https() {
         let url = parse_merchant_url("http://merchant.com");
-        assert!(url.is_err());
+        assert!(
+            matches!(url, Err(BridgeError::InvalidMerchantUrl(_))),
+            "expected InvalidMerchantUrl error for HTTP URL"
+        );
         if let Err(BridgeError::InvalidMerchantUrl(msg)) = url {
             assert!(msg.contains("HTTPS"));
-        } else {
-            panic!("expected InvalidMerchantUrl error");
         }
     }
 
@@ -196,9 +197,10 @@ mod tests {
 
     #[test]
     fn test_compute_content_digest_known_value() {
+        use sha2::{Digest, Sha256};
+
         let digest = compute_content_digest(b"test body");
         // Verify against known SHA-256 hash
-        use sha2::{Digest, Sha256};
         let hash = Sha256::digest(b"test body");
         let hash_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, hash);
         let expected = format!("sha-256=:{hash_b64}:");

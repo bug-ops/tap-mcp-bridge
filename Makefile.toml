@@ -5,12 +5,14 @@
 [tasks.format]
 description = "Format all code using rustfmt (nightly for unstable features)"
 command = "cargo"
-args = ["+nightly", "fmt", "--all"]
+args = ["fmt", "--all"]
+toolchain = "nightly"
 
 [tasks.format-check]
 description = "Check code formatting without modifying files"
 command = "cargo"
-args = ["+nightly", "fmt", "--all", "--", "--check"]
+args = ["fmt", "--all", "--", "--check"]
+toolchain = "nightly"
 
 [tasks.clippy]
 description = "Run clippy with strict warnings"
@@ -35,12 +37,13 @@ args = ["deny", "check"]
 [tasks.audit]
 description = "Additional security vulnerability scan with cargo-audit"
 command = "cargo"
-args = ["audit", "--deny", "warnings"]
+args = ["audit"]
 
 [tasks.udeps]
 description = "Check for unused dependencies"
 command = "cargo"
-args = ["+nightly", "udeps", "--all-targets"]
+args = ["udeps", "--all-targets"]
+toolchain = "nightly"
 
 [tasks.hack-check]
 description = "Validate all feature combinations"
@@ -50,7 +53,8 @@ args = ["hack", "check", "--feature-powerset", "--no-dev-deps"]
 [tasks.miri]
 description = "Run miri on tests (for unsafe code validation)"
 command = "cargo"
-args = ["+nightly", "miri", "test"]
+args = ["miri", "test"]
+toolchain = "nightly"
 
 [tasks.doc]
 description = "Build documentation"

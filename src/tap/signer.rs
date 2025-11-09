@@ -231,7 +231,7 @@ mod tests {
             "merchant.com",
             "/checkout",
             "sha-256=:xyz123=:",
-            1234567890,
+            1_234_567_890,
         );
 
         // Verify RFC 9421 signature base string format
@@ -254,7 +254,7 @@ mod tests {
             "merchant.com",
             "/checkout",
             "sha-256=:xyz=:",
-            1234567890,
+            1_234_567_890,
         );
 
         // Verify component order matches RFC 9421 requirements
@@ -307,6 +307,8 @@ mod tests {
 
     #[test]
     fn test_sign_request_signature_verifiable() {
+        use ed25519_dalek::{Signature, Verifier};
+
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let verifying_key = signing_key.verifying_key();
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
@@ -344,11 +346,9 @@ mod tests {
             signer.build_signature_base(method, authority, path, &content_digest, created);
 
         // Verify signature
-        use ed25519_dalek::Signature;
         let signature =
             Signature::from_bytes(&sig_bytes.try_into().expect("signature should be 64 bytes"));
 
-        use ed25519_dalek::Verifier;
         assert!(
             verifying_key.verify(signature_base.as_bytes(), &signature).is_ok(),
             "generated signature must be verifiable"

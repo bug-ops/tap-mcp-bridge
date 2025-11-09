@@ -67,6 +67,6 @@ mod tests {
     #[test]
     fn test_library_exports() {
         // Verify public API is accessible
-        let _error_type: std::marker::PhantomData<BridgeError> = std::marker::PhantomData;
+        let _ = std::marker::PhantomData::<BridgeError>;
     }
 }
