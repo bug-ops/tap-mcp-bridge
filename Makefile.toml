@@ -34,11 +34,6 @@ description = "Check advisories, licenses, and bans with cargo-deny"
 command = "cargo"
 args = ["deny", "check"]
 
-[tasks.audit]
-description = "Additional security vulnerability scan with cargo-audit"
-command = "cargo"
-args = ["audit"]
-
 [tasks.udeps]
 description = "Check for unused dependencies"
 command = "cargo"
@@ -103,7 +98,6 @@ dependencies = [
     "clippy",
     "test",
     "deny",
-    "audit",
     "udeps",
     "hack-check"
 ]
@@ -124,6 +118,5 @@ dependencies = [
     "clippy",
     "test",
     "deny",
-    "audit",
     "doc"
 ]
