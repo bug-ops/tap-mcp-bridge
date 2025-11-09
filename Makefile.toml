@@ -1,0 +1,125 @@
+# Makefile.toml for cargo-make
+# Install with: cargo install cargo-make
+# Run with: cargo make <task>
+
+[tasks.format]
+description = "Format all code using rustfmt (nightly for unstable features)"
+command = "cargo"
+args = ["+nightly", "fmt", "--all"]
+
+[tasks.format-check]
+description = "Check code formatting without modifying files"
+command = "cargo"
+args = ["+nightly", "fmt", "--all", "--", "--check"]
+
+[tasks.clippy]
+description = "Run clippy with strict warnings"
+command = "cargo"
+args = ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+
+[tasks.test]
+description = "Run all tests with nextest (default)"
+command = "cargo"
+args = ["nextest", "run", "--all-features"]
+
+[tasks.test-cargo]
+description = "Run tests with cargo test (fallback)"
+command = "cargo"
+args = ["test", "--all-features"]
+
+[tasks.deny]
+description = "Check advisories, licenses, and bans with cargo-deny"
+command = "cargo"
+args = ["deny", "check"]
+
+[tasks.audit]
+description = "Additional security vulnerability scan with cargo-audit"
+command = "cargo"
+args = ["audit", "--deny", "warnings"]
+
+[tasks.udeps]
+description = "Check for unused dependencies"
+command = "cargo"
+args = ["+nightly", "udeps", "--all-targets"]
+
+[tasks.hack-check]
+description = "Validate all feature combinations"
+command = "cargo"
+args = ["hack", "check", "--feature-powerset", "--no-dev-deps"]
+
+[tasks.miri]
+description = "Run miri on tests (for unsafe code validation)"
+command = "cargo"
+args = ["+nightly", "miri", "test"]
+
+[tasks.doc]
+description = "Build documentation"
+command = "cargo"
+args = ["doc", "--all-features", "--no-deps"]
+
+[tasks.doc-open]
+description = "Build and open documentation"
+command = "cargo"
+args = ["doc", "--all-features", "--no-deps", "--open"]
+
+[tasks.build]
+description = "Build the project"
+command = "cargo"
+args = ["build"]
+
+[tasks.build-release]
+description = "Build the project in release mode"
+command = "cargo"
+args = ["build", "--release"]
+
+[tasks.clean]
+description = "Clean build artifacts"
+command = "cargo"
+args = ["clean"]
+
+[tasks.check]
+description = "Quick check without building"
+command = "cargo"
+args = ["check", "--all-targets", "--all-features"]
+
+# Composite tasks
+[tasks.verify]
+description = "Run full verification suite (format-check, clippy, test, deny)"
+dependencies = [
+    "format-check",
+    "clippy",
+    "test",
+    "deny"
+]
+
+[tasks.verify-all]
+description = "Run complete verification including security and dependency checks"
+dependencies = [
+    "format-check",
+    "clippy",
+    "test",
+    "deny",
+    "audit",
+    "udeps",
+    "hack-check"
+]
+
+[tasks.pre-commit]
+description = "Run checks before committing (matches CLAUDE.md checklist)"
+dependencies = [
+    "format",
+    "clippy",
+    "test",
+    "deny"
+]
+
+[tasks.ci]
+description = "CI pipeline simulation (matches GitHub Actions workflow)"
+dependencies = [
+    "format-check",
+    "clippy",
+    "test",
+    "deny",
+    "audit",
+    "doc"
+]

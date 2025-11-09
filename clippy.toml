@@ -1,0 +1,45 @@
+# Clippy configuration for tap-mcp-bridge
+# Strict linting rules following Microsoft Rust Guidelines
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 25
+
+# Maximum allowed function parameters
+too-many-arguments-threshold = 7
+
+# Type complexity threshold
+type-complexity-threshold = 250
+
+# Single char binding names threshold
+single-char-binding-names-threshold = 4
+
+# Documentation requirements
+check-private-items = false
+missing-docs-in-crate-items = true
+
+# Large error threshold
+large-error-threshold = 128
+
+# Performance thresholds
+vec-box-size-threshold = 4096
+trivial-copy-size-limit = 128
+
+# Avoid lints that conflict with auto-formatting
+avoid-breaking-exported-api = true
+
+# Allow certain patterns common in idiomatic Rust
+allow-mixed-uninlined-format-args = false
+
+# Unwrap usage policy (should use proper error handling)
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-unwrap-in-consts = false
+allow-expect-in-consts = false
+
+# Allow patterns in tests
+allow-print-in-tests = true
+allow-dbg-in-tests = false
+
+# Maximum booleans in function parameters and structs
+max-fn-params-bools = 2
+max-struct-bools = 3

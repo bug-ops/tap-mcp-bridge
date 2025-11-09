@@ -1,0 +1,53 @@
+# Cargo configuration for tap-mcp-bridge
+
+[build]
+# Show warnings by default
+rustflags = []
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/ld"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=/usr/bin/ld"]
+
+# Alias commands for convenience
+[alias]
+# Run all checks (clippy with deny warnings)
+check-all = "clippy --all-targets --all-features -- -D warnings"
+
+# Format check without modifying files
+fmt-check = "fmt --all -- --check"
+
+# Run tests with nextest if available, otherwise standard test
+test-all = "nextest run --all-features"
+
+# Audit dependencies for security vulnerabilities
+audit = "audit --deny warnings"
+
+# Check for unused dependencies
+udeps = "udeps --all-targets"
+
+# Validate all feature combinations
+hack-check = "hack check --feature-powerset --no-dev-deps"
+
+# Run miri on tests (for unsafe code validation)
+miri-test = "miri test"
+
+# Full verification suite
+verify = """
+sh -c '
+    cargo fmt --all -- --check &&
+    cargo clippy --all-targets --all-features -- -D warnings &&
+    cargo test --all-features &&
+    cargo audit --deny warnings &&
+    cargo udeps --all-targets
+'
+"""
+
+[term]
+verbose = false
+color = "auto"

@@ -1,0 +1,121 @@
+[package]
+name = "tap-mcp-bridge"
+version = "0.1.0"
+edition = "2024"
+authors = []
+license = "MIT OR Apache-2.0"
+description = "A bridge library for TAP-MCP integration"
+repository = "https://github.com/example/tap-mcp-bridge"
+readme = "README.md"
+keywords = ["tap", "mcp", "bridge", "integration"]
+categories = ["development-tools"]
+
+[dependencies]
+# MCP Protocol
+rmcp = "0.8"
+
+# Cryptography (TAP signatures)
+ed25519-dalek = "2.1"
+sha2 = "0.10"
+base64 = "0.22"
+
+# HTTP Client
+reqwest = { version = "0.12", features = ["json"] }
+url = "2.5"
+
+# Async Runtime (minimal features for MVP)
+tokio = { version = "1.35", features = ["rt", "macros"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error Handling
+thiserror = "1.0"
+
+# Logging (basic only)
+tracing = "0.1"
+
+[dev-dependencies]
+
+# Linting configuration following Microsoft Rust Guidelines
+[lints.rust]
+# Compiler lints
+ambiguous_negative_literals = "warn"
+missing_debug_implementations = "warn"
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
+trivial_numeric_casts = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+missing_docs = "warn"
+
+[lints.clippy]
+# Enable all major lint categories
+cargo = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+
+# Restriction lints for code quality
+allow_attributes_without_reason = "warn"
+as_underscore = "warn"
+clone_on_ref_ptr = "warn"
+dbg_macro = "warn"
+default_union_representation = "warn"
+deref_by_slicing = "warn"
+empty_drop = "warn"
+empty_structs_with_brackets = "warn"
+exit = "warn"
+filetype_is_file = "warn"
+float_cmp_const = "warn"
+fn_to_numeric_cast_any = "warn"
+format_push_string = "warn"
+get_unwrap = "warn"
+if_then_some_else_none = "warn"
+impl_trait_in_params = "warn"
+let_underscore_must_use = "warn"
+lossy_float_literal = "warn"
+mem_forget = "warn"
+mixed_read_write_in_expression = "warn"
+mutex_atomic = "warn"
+needless_raw_strings = "warn"
+panic = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+rc_buffer = "warn"
+rc_mutex = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+same_name_method = "warn"
+semicolon_outside_block = "warn"
+str_to_string = "warn"
+string_add = "warn"
+string_slice = "warn"
+todo = "warn"
+try_err = "warn"
+undocumented_unsafe_blocks = "warn"
+unimplemented = "warn"
+unnecessary_safety_comment = "warn"
+unnecessary_safety_doc = "warn"
+unreachable = "warn"
+unwrap_used = "warn"
+use_debug = "warn"
+verbose_file_reads = "warn"
+
+# Specific overrides for common patterns
+module_name_repetitions = "allow"
+similar_names = "allow"
+
+# Profile for benchmarks with debug symbols for profiling
+[profile.bench]
+debug = 1
+
+# Release profile optimizations
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
