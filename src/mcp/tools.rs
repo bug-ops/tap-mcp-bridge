@@ -127,6 +127,11 @@ pub struct BrowseResult {
 ///     merchant_url: "https://merchant.com".into(),
 ///     consumer_id: "user-123".into(),
 ///     intent: "payment".into(),
+///     country_code: "US".into(),
+///     zip: "94025".into(),
+///     ip_address: "192.168.1.100".into(),
+///     user_agent: "Mozilla/5.0".into(),
+///     platform: "macOS".into(),
 /// };
 ///
 /// let result = checkout_with_tap(&signer, params).await?;
@@ -204,6 +209,11 @@ pub async fn checkout_with_tap(
 /// let params = BrowseParams {
 ///     merchant_url: "https://merchant.com".into(),
 ///     consumer_id: "user-123".into(),
+///     country_code: "US".into(),
+///     zip: "94025".into(),
+///     ip_address: "192.168.1.100".into(),
+///     user_agent: "Mozilla/5.0".into(),
+///     platform: "macOS".into(),
 /// };
 ///
 /// let result = browse_merchant(&signer, params).await?;

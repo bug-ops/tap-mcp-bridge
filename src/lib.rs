@@ -60,6 +60,11 @@
 //!     merchant_url: "https://merchant.example.com/checkout".to_string(),
 //!     consumer_id: "user-456".to_string(),
 //!     intent: "payment".to_string(),
+//!     country_code: "US".to_string(),
+//!     zip: "94025".to_string(),
+//!     ip_address: "192.168.1.100".to_string(),
+//!     user_agent: "Mozilla/5.0".to_string(),
+//!     platform: "macOS".to_string(),
 //! };
 //!
 //! // Execute TAP-authenticated checkout
@@ -87,6 +92,11 @@
 //! let params = BrowseParams {
 //!     merchant_url: "https://merchant.example.com".to_string(),
 //!     consumer_id: "user-456".to_string(),
+//!     country_code: "US".to_string(),
+//!     zip: "94025".to_string(),
+//!     ip_address: "192.168.1.100".to_string(),
+//!     user_agent: "Mozilla/5.0".to_string(),
+//!     platform: "macOS".to_string(),
 //! };
 //!
 //! let result = browse_merchant(&signer, params).await?;
@@ -237,6 +247,11 @@
 //!     merchant_url: "https://merchant.example.com/checkout".to_string(),
 //!     consumer_id: "user-123".to_string(),
 //!     intent: "payment".to_string(),
+//!     country_code: "US".to_string(),
+//!     zip: "94025".to_string(),
+//!     ip_address: "192.168.1.100".to_string(),
+//!     user_agent: "Mozilla/5.0".to_string(),
+//!     platform: "macOS".to_string(),
 //! };
 //!
 //! match checkout_with_tap(&signer, params).await {

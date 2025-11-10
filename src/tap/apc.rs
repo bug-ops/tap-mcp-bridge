@@ -99,7 +99,7 @@ use crate::error::{BridgeError, Result};
 ///     cardholder_name: "John Doe".to_owned(),
 /// };
 ///
-/// let apc = signer.generate_apc("nonce", PaymentMethod::Card(card))?;
+/// let apc = signer.generate_apc("nonce", &PaymentMethod::Card(card))?;
 /// assert_eq!(apc.nonce, "nonce");
 /// assert_eq!(apc.alg, "ed25519");
 /// # Ok(())
