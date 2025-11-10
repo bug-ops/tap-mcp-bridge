@@ -330,7 +330,7 @@ impl TapSigner {
     /// use ed25519_dalek::SigningKey;
     /// use tap_mcp_bridge::tap::{
     ///     TapSigner,
-    ///     apc::{CardData, PaymentMethod},
+    ///     apc::{CardData, PaymentMethod, RsaPublicKey},
     /// };
     ///
     /// # fn example() -> tap_mcp_bridge::error::Result<()> {
@@ -347,8 +347,20 @@ impl TapSigner {
     /// };
     /// let payment_method = PaymentMethod::Card(card);
     ///
+    /// // Load merchant's public key (in production, fetch from merchant's JWKS endpoint)
+    /// let pem = b"-----BEGIN PUBLIC KEY-----
+    /// MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo
+    /// 4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u
+    /// +qKhbwKfBstIs+bMY2Zkp18gnTxKLxoS2tFczGkPLPgizskuemMghRniWaoLcyeh
+    /// kd3qqGElvW/VDL5AaWTg0nLVkjRo9z+40RQzuVaE8AkAFmxZzow3x+VJYKdjykkJ
+    /// 0iT9wCS0DRTXu269V264Vf/3jvredZiKRkgwlL9xNAwxXFg0x/XFw005UWVRIkdg
+    /// cKWTjpBP2dPwVZ4WWC+9aGVd+Gyn1o0CLelf4rEjGoXbAAEgAqeGUxrcIlbjXfbc
+    /// mwIDAQAB
+    /// -----END PUBLIC KEY-----";
+    /// let merchant_key = RsaPublicKey::from_pem(pem)?;
+    ///
     /// // Generate APC
-    /// let apc = signer.generate_apc("nonce-123", &payment_method)?;
+    /// let apc = signer.generate_apc("nonce-123", &payment_method, &merchant_key)?;
     /// assert_eq!(apc.nonce, "nonce-123");
     /// assert_eq!(apc.alg, "ed25519");
     /// # Ok(())
@@ -358,9 +370,10 @@ impl TapSigner {
         &self,
         nonce: &str,
         payment_method: &crate::tap::apc::PaymentMethod,
+        merchant_public_key: &crate::tap::apc::RsaPublicKey,
     ) -> Result<crate::tap::apc::Apc> {
-        // Encrypt payment method data
-        let encrypted_payment_data = payment_method.encrypt()?;
+        // Encrypt payment method data with merchant's public key
+        let encrypted_payment_data = payment_method.encrypt(merchant_public_key)?;
 
         // Generate APC with signature
         let kid = self.compute_keyid();

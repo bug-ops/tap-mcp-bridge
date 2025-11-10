@@ -14,6 +14,7 @@ categories = ["development-tools"]
 normal = [
     "rmcp",          # Used for MCP server integration
     "jsonwebtoken",  # Used for ID Token (JWT) generation
+    "josekit",       # Used for JWE encryption in APC
     "secrecy",       # Used for ACRO/APC sensitive data handling
 ]
 
@@ -48,6 +49,9 @@ tracing = "0.1"
 
 # JWT/JWK support for TAP (aws_lc_rs backend for better performance)
 jsonwebtoken = { version = "10.0", features = ["aws_lc_rs"] }
+
+# JWE encryption for APC (RFC 7516)
+josekit = "0.10"
 
 # Sensitive data handling for ACRO/APC
 secrecy = { version = "0.10", features = ["serde"] }

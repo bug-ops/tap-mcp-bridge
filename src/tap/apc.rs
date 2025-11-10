@@ -25,7 +25,7 @@
 //! use ed25519_dalek::SigningKey;
 //! use tap_mcp_bridge::tap::{
 //!     TapSigner,
-//!     apc::{CardData, PaymentMethod},
+//!     apc::{CardData, PaymentMethod, RsaPublicKey},
 //! };
 //!
 //! # fn example() -> tap_mcp_bridge::error::Result<()> {
@@ -42,8 +42,20 @@
 //! };
 //! let payment_method = PaymentMethod::Card(card);
 //!
+//! // Load merchant's public key
+//! let pem = b"-----BEGIN PUBLIC KEY-----
+//! MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo
+//! 4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u
+//! +qKhbwKfBstIs+bMY2Zkp18gnTxKLxoS2tFczGkPLPgizskuemMghRniWaoLcyeh
+//! kd3qqGElvW/VDL5AaWTg0nLVkjRo9z+40RQzuVaE8AkAFmxZzow3x+VJYKdjykkJ
+//! 0iT9wCS0DRTXu269V264Vf/3jvredZiKRkgwlL9xNAwxXFg0x/XFw005UWVRIkdg
+//! cKWTjpBP2dPwVZ4WWC+9aGVd+Gyn1o0CLelf4rEjGoXbAAEgAqeGUxrcIlbjXfbc
+//! mwIDAQAB
+//! -----END PUBLIC KEY-----";
+//! let merchant_key = RsaPublicKey::from_pem(pem)?;
+//!
 //! // Generate APC (encrypts payment data)
-//! let apc = signer.generate_apc("nonce-unique-123", &payment_method)?;
+//! let apc = signer.generate_apc("nonce-unique-123", &payment_method, &merchant_key)?;
 //!
 //! println!("APC nonce: {}", apc.nonce);
 //! println!("Algorithm: {}", apc.alg);
@@ -52,11 +64,71 @@
 //! ```
 
 use ed25519_dalek::{Signer, SigningKey};
+use josekit::jwe::{JweEncrypter, RSA_OAEP_256};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
 use crate::error::{BridgeError, Result};
+
+/// RSA public key for JWE encryption.
+///
+/// Represents a merchant's RSA public key used for encrypting payment data
+/// in the APC. The key must be at least 2048 bits and in PEM format.
+///
+/// # Examples
+///
+/// ```no_run
+/// use tap_mcp_bridge::tap::apc::RsaPublicKey;
+///
+/// let pem = r#"-----BEGIN PUBLIC KEY-----
+/// ...
+/// -----END PUBLIC KEY-----"#;
+///
+/// let public_key = RsaPublicKey::from_pem(pem.as_bytes())?;
+/// # Ok::<(), tap_mcp_bridge::error::BridgeError>(())
+/// ```
+#[derive(Debug, Clone)]
+pub struct RsaPublicKey {
+    encrypter: Box<dyn JweEncrypter>,
+}
+
+impl RsaPublicKey {
+    /// Creates an RSA public key from PEM-encoded data.
+    ///
+    /// # Arguments
+    ///
+    /// * `pem` - PEM-encoded RSA public key
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BridgeError::CryptoError`] if:
+    /// - PEM format is invalid
+    /// - Key is not an RSA public key
+    /// - Key size is insufficient (<2048 bits)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use tap_mcp_bridge::tap::apc::RsaPublicKey;
+    ///
+    /// let pem = std::fs::read("merchant_public_key.pem")?;
+    /// let public_key = RsaPublicKey::from_pem(&pem)?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn from_pem(pem: &[u8]) -> Result<Self> {
+        let encrypter = RSA_OAEP_256
+            .encrypter_from_pem(pem)
+            .map_err(|e| BridgeError::CryptoError(format!("failed to load RSA public key: {e}")))?;
+
+        Ok(Self { encrypter: Box::new(encrypter) })
+    }
+
+    /// Returns the encrypter for JWE operations.
+    fn encrypter(&self) -> &dyn JweEncrypter {
+        self.encrypter.as_ref()
+    }
+}
 
 /// Agentic Payment Container (APC).
 ///
@@ -84,7 +156,7 @@ use crate::error::{BridgeError, Result};
 /// use ed25519_dalek::SigningKey;
 /// use tap_mcp_bridge::tap::{
 ///     TapSigner,
-///     apc::{CardData, PaymentMethod},
+///     apc::{CardData, PaymentMethod, RsaPublicKey},
 /// };
 ///
 /// # fn example() -> tap_mcp_bridge::error::Result<()> {
@@ -99,7 +171,18 @@ use crate::error::{BridgeError, Result};
 ///     cardholder_name: "John Doe".to_owned(),
 /// };
 ///
-/// let apc = signer.generate_apc("nonce", &PaymentMethod::Card(card))?;
+/// let pem = b"-----BEGIN PUBLIC KEY-----
+/// MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo
+/// 4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u
+/// +qKhbwKfBstIs+bMY2Zkp18gnTxKLxoS2tFczGkPLPgizskuemMghRniWaoLcyeh
+/// kd3qqGElvW/VDL5AaWTg0nLVkjRo9z+40RQzuVaE8AkAFmxZzow3x+VJYKdjykkJ
+/// 0iT9wCS0DRTXu269V264Vf/3jvredZiKRkgwlL9xNAwxXFg0x/XFw005UWVRIkdg
+/// cKWTjpBP2dPwVZ4WWC+9aGVd+Gyn1o0CLelf4rEjGoXbAAEgAqeGUxrcIlbjXfbc
+/// mwIDAQAB
+/// -----END PUBLIC KEY-----";
+/// let merchant_key = RsaPublicKey::from_pem(pem)?;
+///
+/// let apc = signer.generate_apc("nonce", &PaymentMethod::Card(card), &merchant_key)?;
 /// assert_eq!(apc.nonce, "nonce");
 /// assert_eq!(apc.alg, "ed25519");
 /// # Ok(())
@@ -272,24 +355,80 @@ pub enum PaymentMethod {
 }
 
 impl PaymentMethod {
-    /// Encrypts payment method data to JWE format.
+    /// Encrypts payment method data to JWE format using RFC 7516.
+    ///
+    /// Uses RSA-OAEP-256 for key encryption and A256GCM for content encryption,
+    /// producing JWE compact serialization format (5 dot-separated parts).
+    ///
+    /// # Arguments
+    ///
+    /// * `merchant_public_key` - Merchant's RSA public key for encryption
     ///
     /// # Errors
     ///
-    /// Returns [`BridgeError::CryptoError`] if encryption fails.
-    pub fn encrypt(&self) -> Result<String> {
+    /// Returns [`BridgeError::CryptoError`] if:
+    /// - JSON serialization fails
+    /// - JWE encryption fails
+    /// - Public key is invalid
+    ///
+    /// # Security
+    ///
+    /// - Uses A256GCM (AES-256-GCM) for content encryption
+    /// - Uses RSA-OAEP-256 for key encryption
+    /// - Produces RFC 7516 compliant JWE compact serialization
+    /// - Sensitive data zeroized after encryption
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tap_mcp_bridge::tap::apc::{CardData, PaymentMethod, RsaPublicKey};
+    ///
+    /// # fn example() -> tap_mcp_bridge::error::Result<()> {
+    /// let card = CardData {
+    ///     number: "4111111111111111".to_owned(),
+    ///     exp_month: "12".to_owned(),
+    ///     exp_year: "25".to_owned(),
+    ///     cvv: "123".to_owned(),
+    ///     cardholder_name: "John Doe".to_owned(),
+    /// };
+    ///
+    /// let pem = b"-----BEGIN PUBLIC KEY-----
+    /// MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo
+    /// 4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u
+    /// +qKhbwKfBstIs+bMY2Zkp18gnTxKLxoS2tFczGkPLPgizskuemMghRniWaoLcyeh
+    /// kd3qqGElvW/VDL5AaWTg0nLVkjRo9z+40RQzuVaE8AkAFmxZzow3x+VJYKdjykkJ
+    /// 0iT9wCS0DRTXu269V264Vf/3jvredZiKRkgwlL9xNAwxXFg0x/XFw005UWVRIkdg
+    /// cKWTjpBP2dPwVZ4WWC+9aGVd+Gyn1o0CLelf4rEjGoXbAAEgAqeGUxrcIlbjXfbc
+    /// mwIDAQAB
+    /// -----END PUBLIC KEY-----";
+    /// let public_key = RsaPublicKey::from_pem(pem)?;
+    ///
+    /// let payment = PaymentMethod::Card(card);
+    /// let jwe = payment.encrypt(&public_key)?;
+    ///
+    /// // JWE has 5 dot-separated parts
+    /// assert_eq!(jwe.split('.').count(), 5);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn encrypt(&self, merchant_public_key: &RsaPublicKey) -> Result<String> {
         // Serialize payment method to JSON
         let json = self.to_json()?;
 
-        // TODO: Implement proper JWE encryption with merchant's public key
-        // For MVP, we use a simple base64 encoding as placeholder
-        // In production, this MUST use JWE with merchant's public key
-        let encrypted = base64::Engine::encode(
-            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-            json.as_bytes(),
-        );
+        // Create JWE header with RSA-OAEP-256 and A256GCM
+        let mut header = josekit::jwe::JweHeader::new();
+        header.set_algorithm("RSA-OAEP-256");
+        header.set_content_encryption("A256GCM");
 
-        Ok(encrypted)
+        // Encrypt to JWE compact serialization (5 parts: header.key.iv.ciphertext.tag)
+        let jwe = josekit::jwe::serialize_compact(
+            json.as_bytes(),
+            &header,
+            merchant_public_key.encrypter(),
+        )
+        .map_err(|e| BridgeError::CryptoError(format!("JWE encryption failed: {e}")))?;
+
+        Ok(jwe)
     }
 
     /// Serializes payment method to JSON.
@@ -541,6 +680,22 @@ mod tests {
         alg: &'a str,
     }
 
+    // Helper function to create test RSA public key
+    fn create_test_rsa_public_key() -> RsaPublicKey {
+        // 2048-bit RSA public key in PEM format (for testing only)
+        let pem = "-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo
+4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u
++qKhbwKfBstIs+bMY2Zkp18gnTxKLxoS2tFczGkPLPgizskuemMghRniWaoLcyeh
+kd3qqGElvW/VDL5AaWTg0nLVkjRo9z+40RQzuVaE8AkAFmxZzow3x+VJYKdjykkJ
+0iT9wCS0DRTXu269V264Vf/3jvredZiKRkgwlL9xNAwxXFg0x/XFw005UWVRIkdg
+cKWTjpBP2dPwVZ4WWC+9aGVd+Gyn1o0CLelf4rEjGoXbAAEgAqeGUxrcIlbjXfbc
+mwIDAQAB
+-----END PUBLIC KEY-----";
+
+        RsaPublicKey::from_pem(pem.as_bytes()).expect("Failed to create test RSA key")
+    }
+
     #[test]
     fn test_apc_creation() {
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
@@ -768,11 +923,14 @@ mod tests {
             cardholder_name: "John Doe".to_owned(),
         };
         let payment = PaymentMethod::Card(card);
+        let merchant_key = create_test_rsa_public_key();
 
-        let encrypted = payment.encrypt();
+        let encrypted = payment.encrypt(&merchant_key);
         assert!(encrypted.is_ok());
         let encrypted = encrypted.unwrap();
         assert!(!encrypted.is_empty());
+        // Verify JWE format (5 dot-separated parts)
+        assert_eq!(encrypted.split('.').count(), 5);
     }
 
     #[test]
@@ -784,9 +942,13 @@ mod tests {
             account_holder_name: "Jane Doe".to_owned(),
         };
         let payment = PaymentMethod::BankAccount(account);
+        let merchant_key = create_test_rsa_public_key();
 
-        let encrypted = payment.encrypt();
+        let encrypted = payment.encrypt(&merchant_key);
         assert!(encrypted.is_ok());
+        let encrypted = encrypted.unwrap();
+        // Verify JWE format (5 dot-separated parts)
+        assert_eq!(encrypted.split('.').count(), 5);
     }
 
     #[test]
@@ -797,9 +959,13 @@ mod tests {
             account_holder_name: "Bob Smith".to_owned(),
         };
         let payment = PaymentMethod::DigitalWallet(wallet);
+        let merchant_key = create_test_rsa_public_key();
 
-        let encrypted = payment.encrypt();
+        let encrypted = payment.encrypt(&merchant_key);
         assert!(encrypted.is_ok());
+        let encrypted = encrypted.unwrap();
+        // Verify JWE format (5 dot-separated parts)
+        assert_eq!(encrypted.split('.').count(), 5);
     }
 
     #[test]

@@ -20,7 +20,7 @@
 use ed25519_dalek::SigningKey;
 use tap_mcp_bridge::tap::{
     TapSigner,
-    apc::{BankAccountData, CardData, DigitalWalletData, PaymentMethod},
+    apc::{BankAccountData, CardData, DigitalWalletData, PaymentMethod, RsaPublicKey},
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,6 +46,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("2. Generated Nonce (for replay protection)");
     println!("   Nonce: {}\n", nonce);
 
+    // Load merchant's public key (in production, fetch from merchant's JWKS endpoint)
+    let merchant_pem = "-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo
+4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u
++qKhbwKfBstIs+bMY2Zkp18gnTxKLxoS2tFczGkPLPgizskuemMghRniWaoLcyeh
+kd3qqGElvW/VDL5AaWTg0nLVkjRo9z+40RQzuVaE8AkAFmxZzow3x+VJYKdjykkJ
+0iT9wCS0DRTXu269V264Vf/3jvredZiKRkgwlL9xNAwxXFg0x/XFw005UWVRIkdg
+cKWTjpBP2dPwVZ4WWC+9aGVd+Gyn1o0CLelf4rEjGoXbAAEgAqeGUxrcIlbjXfbc
+mwIDAQAB
+-----END PUBLIC KEY-----";
+    let merchant_key = RsaPublicKey::from_pem(merchant_pem.as_bytes())?;
+    println!("3. Merchant Public Key Loaded (for JWE encryption)\n");
+
     // Example 1: Card Payment
     println!("========================================");
     println!("Example 1: Card Payment\n");
@@ -65,7 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Credential Hash: {}\n", card.credential_hash());
 
     let payment_method = PaymentMethod::Card(card);
-    let apc = signer.generate_apc(&nonce, &payment_method)?;
+    let apc = signer.generate_apc(&nonce, &payment_method, &merchant_key)?;
 
     println!("4. Generated APC (Card Payment)");
     println!("   Nonce: {}", apc.nonce);
@@ -100,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Account Holder: {}\n", account.account_holder_name);
 
     let payment_method = PaymentMethod::BankAccount(account);
-    let apc = signer.generate_apc(&nonce, &payment_method)?;
+    let apc = signer.generate_apc(&nonce, &payment_method, &merchant_key)?;
 
     println!("7. Generated APC (Bank Account)");
     println!("   Nonce: {}", apc.nonce);
@@ -127,7 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Account Holder: {}\n", wallet.account_holder_name);
 
     let payment_method = PaymentMethod::DigitalWallet(wallet);
-    let apc = signer.generate_apc(&nonce, &payment_method)?;
+    let apc = signer.generate_apc(&nonce, &payment_method, &merchant_key)?;
 
     println!("9. Generated APC (Digital Wallet)");
     println!("   Nonce: {}", apc.nonce);
