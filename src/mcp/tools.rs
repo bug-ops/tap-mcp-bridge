@@ -1,5 +1,7 @@
 //! MCP tools for TAP operations.
 
+use std::time::Duration;
+
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -27,6 +29,24 @@ pub struct CheckoutResult {
     pub status: String,
     /// Merchant response message.
     pub message: String,
+}
+
+/// Parameters for browse merchant operation.
+#[derive(Debug, Deserialize)]
+pub struct BrowseParams {
+    /// Merchant URL.
+    pub merchant_url: String,
+    /// Consumer identifier.
+    pub consumer_id: String,
+}
+
+/// Result of browse merchant operation.
+#[derive(Debug, Serialize)]
+pub struct BrowseResult {
+    /// Browse status.
+    pub status: String,
+    /// Catalog data or message.
+    pub data: String,
 }
 
 /// Executes TAP-authenticated checkout with a merchant.
@@ -62,6 +82,8 @@ pub async fn checkout_with_tap(
     signer: &TapSigner,
     params: CheckoutParams,
 ) -> Result<CheckoutResult> {
+    validate_consumer_id(&params.consumer_id)?;
+
     info!(
         merchant_url = %params.merchant_url,
         consumer_id = %params.consumer_id,
@@ -74,7 +96,11 @@ pub async fn checkout_with_tap(
     let body = b"";
     let signature = signer.sign_request("POST", url.host_str().unwrap_or(""), &path, body)?;
 
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(BridgeError::HttpError)?;
+
     let response = client
         .post(format!("{url}{path}"))
         .header("Signature", &signature.signature)
@@ -99,6 +125,100 @@ pub async fn checkout_with_tap(
     })
 }
 
+/// Browses merchant catalog with TAP authentication.
+///
+/// This is the second Phase 2 tool that validates pattern reuse.
+///
+/// # Errors
+///
+/// Returns error if signature generation or HTTP request fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use tap_mcp_bridge::mcp::browse_merchant;
+/// # use tap_mcp_bridge::mcp::BrowseParams;
+/// # use tap_mcp_bridge::tap::TapSigner;
+/// # use ed25519_dalek::SigningKey;
+/// # async fn example() -> tap_mcp_bridge::error::Result<()> {
+/// let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+/// let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+///
+/// let params = BrowseParams {
+///     merchant_url: "https://merchant.com".into(),
+///     consumer_id: "user-123".into(),
+/// };
+///
+/// let result = browse_merchant(&signer, params).await?;
+/// # Ok(())
+/// # }
+/// ```
+pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result<BrowseResult> {
+    validate_consumer_id(&params.consumer_id)?;
+
+    info!(
+        merchant_url = %params.merchant_url,
+        consumer_id = %params.consumer_id,
+        "Browsing merchant catalog"
+    );
+
+    let url = parse_merchant_url(&params.merchant_url)?;
+    let path = format!("/catalog?consumer_id={}", params.consumer_id);
+
+    let body = b"";
+    let signature = signer.sign_request("GET", url.host_str().unwrap_or(""), &path, body)?;
+
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(BridgeError::HttpError)?;
+
+    let response = client
+        .get(format!("{url}{path}"))
+        .header("Signature", &signature.signature)
+        .header("Signature-Input", &signature.signature_input)
+        .header("Signature-Agent", &signature.agent_directory)
+        .header("Content-Digest", compute_content_digest(body))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        return Err(BridgeError::MerchantError(format!(
+            "merchant returned status {}",
+            response.status()
+        )));
+    }
+
+    info!(status = %response.status(), "Browse catalog completed");
+
+    Ok(BrowseResult {
+        status: "completed".to_owned(),
+        data: "Catalog retrieved successfully".to_owned(),
+    })
+}
+
+/// Validates consumer ID format.
+fn validate_consumer_id(consumer_id: &str) -> Result<()> {
+    if consumer_id.is_empty() {
+        return Err(BridgeError::InvalidMerchantUrl("consumer_id cannot be empty".into()));
+    }
+
+    if consumer_id.len() > 64 {
+        return Err(BridgeError::InvalidMerchantUrl(
+            "consumer_id must be 64 characters or less".into(),
+        ));
+    }
+
+    if !consumer_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err(BridgeError::InvalidMerchantUrl(
+            "consumer_id must contain only alphanumeric characters, hyphens, and underscores"
+                .into(),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Parses and validates merchant URL.
 fn parse_merchant_url(url_str: &str) -> Result<url::Url> {
     let url = url::Url::parse(url_str)
@@ -106,6 +226,12 @@ fn parse_merchant_url(url_str: &str) -> Result<url::Url> {
 
     if url.scheme() != "https" {
         return Err(BridgeError::InvalidMerchantUrl("URL must use HTTPS".into()));
+    }
+
+    if let Some(host) = url.host_str()
+        && (host == "localhost" || host == "127.0.0.1" || host.starts_with("localhost:"))
+    {
+        return Err(BridgeError::InvalidMerchantUrl("localhost URLs not allowed".into()));
     }
 
     Ok(url)
@@ -155,11 +281,26 @@ mod tests {
 
     #[test]
     fn test_parse_merchant_url_rejects_localhost() {
-        // Security requirement: no localhost URLs
         let url = parse_merchant_url("https://localhost:3000");
-        // Currently this passes, but should be rejected in Phase 2
-        // Documenting expected behavior for future hardening
-        assert!(url.is_ok());
+        assert!(
+            matches!(url, Err(BridgeError::InvalidMerchantUrl(_))),
+            "expected InvalidMerchantUrl error for localhost URL"
+        );
+        if let Err(BridgeError::InvalidMerchantUrl(msg)) = url {
+            assert!(msg.contains("localhost"));
+        }
+    }
+
+    #[test]
+    fn test_parse_merchant_url_rejects_localhost_plain() {
+        let url = parse_merchant_url("https://localhost");
+        assert!(url.is_err());
+    }
+
+    #[test]
+    fn test_parse_merchant_url_rejects_127_0_0_1() {
+        let url = parse_merchant_url("https://127.0.0.1:8080");
+        assert!(url.is_err());
     }
 
     #[test]
@@ -205,5 +346,46 @@ mod tests {
         let hash_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, hash);
         let expected = format!("sha-256=:{hash_b64}:");
         assert_eq!(digest, expected);
+    }
+
+    #[test]
+    fn test_validate_consumer_id_valid() {
+        assert!(validate_consumer_id("user-123").is_ok());
+        assert!(validate_consumer_id("user_456").is_ok());
+        assert!(validate_consumer_id("abc123-def456_ghi789").is_ok());
+    }
+
+    #[test]
+    fn test_validate_consumer_id_empty() {
+        let result = validate_consumer_id("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_consumer_id_too_long() {
+        let long_id = "a".repeat(65);
+        let result = validate_consumer_id(&long_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_consumer_id_max_length() {
+        let max_id = "a".repeat(64);
+        assert!(validate_consumer_id(&max_id).is_ok());
+    }
+
+    #[test]
+    fn test_validate_consumer_id_invalid_characters() {
+        assert!(validate_consumer_id("user@example").is_err());
+        assert!(validate_consumer_id("user#123").is_err());
+        assert!(validate_consumer_id("user 123").is_err());
+        assert!(validate_consumer_id("user.123").is_err());
+    }
+
+    #[test]
+    fn test_validate_consumer_id_alphanumeric_only() {
+        assert!(validate_consumer_id("abc123").is_ok());
+        assert!(validate_consumer_id("ABC123").is_ok());
+        assert!(validate_consumer_id("123456").is_ok());
     }
 }

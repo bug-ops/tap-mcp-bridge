@@ -10,14 +10,15 @@
 //! HTTP Message Signatures using Ed25519, enabling AI agents to execute
 //! authenticated payment transactions via MCP tools.
 //!
-//! # Phase 1: MVP
+//! # Phase 2: Core Validation
 //!
-//! The current implementation provides minimal functionality to validate
-//! the TAP-MCP integration hypothesis:
+//! The current implementation provides core functionality to validate
+//! pattern reuse and basic security:
 //!
-//! - Single MCP tool: `checkout_with_tap`
+//! - Two MCP tools: `checkout_with_tap`, `browse_merchant`
 //! - RFC 9421 signature generation with Ed25519
-//! - Basic error handling
+//! - Network error handling with timeouts
+//! - Input validation (URL sanitization, consumer ID format)
 //!
 //! # Examples
 //!

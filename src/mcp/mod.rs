@@ -2,4 +2,6 @@
 
 pub mod tools;
 
-pub use tools::{CheckoutParams, CheckoutResult, checkout_with_tap};
+pub use tools::{
+    BrowseParams, BrowseResult, CheckoutParams, CheckoutResult, browse_merchant, checkout_with_tap,
+};
