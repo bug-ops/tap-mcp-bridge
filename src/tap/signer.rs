@@ -45,7 +45,6 @@ pub struct TapSignature {
 #[derive(Debug)]
 pub struct TapSigner {
     signing_key: SigningKey,
-    #[allow(dead_code, reason = "reserved for future use in Phase 2")]
     agent_id: String,
     agent_directory: Arc<str>,
 }

@@ -150,8 +150,8 @@
 //! - ✅ JWK Thumbprint key identifiers (RFC 7638)
 //! - ✅ Public Key Directory (JWKS at `/.well-known/http-message-signatures-directory`)
 //! - ✅ ID Token (JWT) generation for consumer authentication
-//! - ✅ Agentic Consumer Recognition Object (ACRO) - Phase 4D complete
-//! - ✅ Agentic Payment Container (APC) - Phase 4E complete
+//! - ✅ Agentic Consumer Recognition Object (ACRO)
+//! - ✅ Agentic Payment Container (APC)
 //!
 //! # TAP Compliance: 100% (18/18 requirements)
 //!

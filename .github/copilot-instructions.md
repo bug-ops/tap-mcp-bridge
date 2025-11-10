@@ -4,7 +4,7 @@
 
 **tap-mcp-bridge** is a Rust library (Edition 2024) that bridges Visa's Trusted Agent Protocol (TAP) with Anthropic's Model Context Protocol (MCP), enabling AI agents to securely authenticate with TAP-protected merchants.
 
-**Current Status**: Phase 1 MVP - Hypothesis validation
+**Current Status**: Production-ready with 100% TAP compliance (18/18 requirements)
 
 ## Core Development Philosophy
 
@@ -309,21 +309,19 @@ error!("Signature generation failed: {}", err);
 
 ## Dependency Strategy
 
-### Current Dependencies (Phase 1)
+### Current Dependencies
 - `rmcp` - MCP Server implementation
 - `ed25519-dalek` - Ed25519 signing
 - `sha2` - Content-Digest, JWK thumbprints
 - `reqwest` - HTTP Client
-- `tokio` - Async Runtime (minimal features)
+- `tokio` - Async Runtime
 - `serde`, `serde_json` - Serialization
 - `thiserror` - Error Handling
-- `tracing` - Basic logging
-
-### Deferred Dependencies (Add Only When Needed)
-- `lru` - if replay protection required
-- `aes-gcm`, `secrecy` - if credential storage required
-- `anyhow` - if complex error contexts emerge
-- `async-trait` - if multiple trait implementations needed
+- `tracing` - Logging
+- `jsonwebtoken` - JWT/JWK support for TAP
+- `secrecy` - Sensitive data handling for ACRO/APC
+- `hex` - SHA-256 hash encoding
+- `zeroize` - Memory zeroization (PCI-DSS compliance)
 
 ### Selection Criteria
 1. Actively maintained (last commit <6 months)
@@ -344,25 +342,12 @@ error!("Signature generation failed: {}", err);
 ### MCP Integration
 - Expose TAP operations as MCP tools
 - JSON-RPC 2.0 over stdio/HTTP
-- Currently implements: `checkout_with_tap` (Phase 1)
+- Implements: `checkout_with_tap`, `browse_merchant`
 
 ### Security-Critical Components
 1. **TapSigner** - RFC 9421 signature generation (core security risk)
 2. **Agent Registry** - Public key management
 3. **Input validation** - Sanitize merchant URLs, consumer IDs
-
-## Implementation Phases
-
-### Phase 1: Hypothesis Validation (CURRENT)
-- Goal: Prove TAP-MCP integration is technically feasible
-- Scope: Single MCP tool, RFC 9421 signatures, one end-to-end request
-- Success: Claude invokes tool, signature validates, merchant responds
-
-### Deferred to Later Phases
-- Session management
-- Error recovery
-- Multiple tools
-- Production features (retry, circuit breaker, metrics)
 
 ## Resources
 

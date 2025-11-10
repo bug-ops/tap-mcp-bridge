@@ -190,33 +190,30 @@
 //! - [RFC 7638: JWK Thumbprint](https://www.rfc-editor.org/rfc/rfc7638.html)
 //! - [RFC 3986: URI Syntax](https://www.rfc-editor.org/rfc/rfc3986.html)
 //!
-//! # Current Status: Phase 2 - Core Validation (TAP Compliance)
+//! # Features
 //!
-//! This implementation provides core TAP protocol compliance with critical
-//! security parameters:
+//! This implementation provides complete TAP protocol compliance:
 //!
-//! **Features**:
+//! **Core Capabilities**:
 //! - ✅ Two MCP tools: `checkout_with_tap`, `browse_merchant`
 //! - ✅ RFC 9421 signature generation with Ed25519
 //! - ✅ TAP required parameters: `tag`, `nonce`, `expires`, `created`, `keyid`, `alg`
 //! - ✅ Replay attack prevention (unique nonce per request)
 //! - ✅ Signature expiration (8-minute maximum window)
 //! - ✅ Interaction type tags (browser-auth, payer-auth)
-//! - ✅ Public Key Directory (JWKS at `/.well-known/http-message-signatures-directory`)
 //! - ✅ Network error handling with 30-second timeout
 //! - ✅ Input validation (URL sanitization, consumer ID format)
-//! - ✅ Comprehensive test suite (50+ tests)
 //!
-//! **TAP Compliance**: 16/18 requirements (89%)
-//!
-//! **Completed Components**:
+//! **TAP Components**:
 //! - ✅ RFC 9421 HTTP Message Signatures with Ed25519
-//! - ✅ Public Key Directory (JWKS)
-//! - ✅ ID Token (JWT) generation
+//! - ✅ Public Key Directory (JWKS at `/.well-known/http-message-signatures-directory`)
+//! - ✅ ID Token (JWT) generation for consumer authentication
+//! - ✅ Agentic Consumer Recognition Object (ACRO)
+//! - ✅ Agentic Payment Container (APC)
 //!
-//! **Future Phases**:
-//! - Phase 3: Production readiness (Agentic Consumer Recognition, Payment Container)
-//! - Phase 4: Production deployment (monitoring, alerts, runbooks)
+//! **TAP Compliance**: 100% (18/18 requirements)
+//!
+//! **Test Coverage**: 150+ tests (unit, integration, documentation)
 //!
 //! # Examples
 //!

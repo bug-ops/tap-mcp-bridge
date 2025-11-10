@@ -106,7 +106,7 @@ pub struct BrowseResult {
 
 /// Executes TAP-authenticated checkout with a merchant.
 ///
-/// This is the core MVP tool that validates the TAP-MCP integration.
+/// This is the primary TAP-MCP integration tool for payment transactions.
 ///
 /// # Errors
 ///
@@ -189,7 +189,7 @@ pub async fn checkout_with_tap(
 
 /// Browses merchant catalog with TAP authentication.
 ///
-/// This is the second Phase 2 tool that validates pattern reuse.
+/// This tool enables browsing merchant catalogs with consumer identity verification.
 ///
 /// # Errors
 ///
@@ -268,7 +268,8 @@ pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result
 
 /// Executes a TAP-authenticated HTTP request with ACRO to a merchant.
 ///
-/// This is the new Phase 4D implementation that includes ACRO in the request body.
+/// Includes Agentic Consumer Recognition Object (ACRO) in the request body for consumer identity
+/// verification.
 async fn execute_tap_request_with_acro(
     signer: &TapSigner,
     merchant_url: &str,

@@ -12,9 +12,9 @@ categories = ["development-tools"]
 
 [package.metadata.cargo-udeps.ignore]
 normal = [
-    "rmcp",          # Used in Phase 2+ for MCP server integration
-    "jsonwebtoken",  # Used in Phase 4C for ID Token (JWT) generation
-    "secrecy",       # Used in Phase 4D/4E for ACRO/APC sensitive data handling
+    "rmcp",          # Used for MCP server integration
+    "jsonwebtoken",  # Used for ID Token (JWT) generation
+    "secrecy",       # Used for ACRO/APC sensitive data handling
 ]
 
 [dependencies]
@@ -49,7 +49,7 @@ tracing = "0.1"
 # JWT/JWK support for TAP (aws_lc_rs backend for better performance)
 jsonwebtoken = { version = "10.0", features = ["aws_lc_rs"] }
 
-# Sensitive data handling (for Phase 4D/4E later)
+# Sensitive data handling for ACRO/APC
 secrecy = { version = "0.10", features = ["serde"] }
 
 [dev-dependencies]
