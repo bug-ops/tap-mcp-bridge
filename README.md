@@ -183,6 +183,50 @@ cd tap-mcp-bridge
 cargo install cargo-make cargo-nextest cargo-deny
 ```
 
+### Performance: Enable sccache for 10x Faster Builds
+
+The project supports sccache for build caching. Once configured, incremental builds become dramatically faster.
+
+Install sccache:
+```bash
+cargo install sccache
+```
+
+Configure Cargo to use sccache by creating or updating `~/.cargo/config.toml`:
+```bash
+mkdir -p ~/.cargo
+cat >> ~/.cargo/config.toml << 'EOF'
+
+[build]
+rustc-wrapper = "sccache"
+incremental = true
+
+[env]
+SCCACHE_DIR = { value = "~/.cache/sccache", force = true }
+SCCACHE_CACHE_SIZE = { value = "10G", force = true }
+EOF
+```
+
+Verify sccache is working:
+```bash
+# Check statistics
+sccache --show-stats
+
+# First build (cache miss)
+cargo clean
+cargo build --release  # ~22s
+
+# Second build (cache hit)
+cargo clean
+cargo build --release  # ~2-3s (10x faster!)
+```
+
+**Benefits:**
+- 10x faster rebuild times after clean builds
+- Shared cache across all Rust projects
+- Reduced CI/CD build times
+- Lower energy consumption for development
+
 ### Common Commands
 
 **Using cargo-make** (recommended):

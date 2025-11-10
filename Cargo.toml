@@ -41,6 +41,8 @@ thiserror = "1.0"
 tracing = "0.1"
 
 [dev-dependencies]
+hex = "0.4"
+tokio = { version = "1.35", features = ["rt", "rt-multi-thread", "macros"] }
 
 # Linting configuration following Microsoft Rust Guidelines
 [lints.rust]

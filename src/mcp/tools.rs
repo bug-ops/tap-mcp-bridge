@@ -82,48 +82,25 @@ pub async fn checkout_with_tap(
     signer: &TapSigner,
     params: CheckoutParams,
 ) -> Result<CheckoutResult> {
-    validate_consumer_id(&params.consumer_id)?;
-
     info!(
         merchant_url = %params.merchant_url,
         consumer_id = %params.consumer_id,
         "Executing TAP checkout"
     );
 
-    let url = parse_merchant_url(&params.merchant_url)?;
     let path = format!("/checkout?consumer_id={}&intent={}", params.consumer_id, params.intent);
 
-    let body = b"";
-    let signature = signer.sign_request(
+    execute_tap_request(
+        signer,
+        &params.merchant_url,
+        &params.consumer_id,
         "POST",
-        url.host_str().unwrap_or(""),
-        &path,
-        body,
+        path,
         InteractionType::Checkout,
-    )?;
+    )
+    .await?;
 
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(BridgeError::HttpError)?;
-
-    let response = client
-        .post(format!("{url}{path}"))
-        .header("Signature", &signature.signature)
-        .header("Signature-Input", &signature.signature_input)
-        .header("Signature-Agent", &signature.agent_directory)
-        .header("Content-Digest", compute_content_digest(body))
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        return Err(BridgeError::MerchantError(format!(
-            "merchant returned status {}",
-            response.status()
-        )));
-    }
-
-    info!(status = %response.status(), "TAP checkout completed");
+    info!("TAP checkout completed");
 
     Ok(CheckoutResult {
         status: "completed".to_owned(),
@@ -160,33 +137,69 @@ pub async fn checkout_with_tap(
 /// # }
 /// ```
 pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result<BrowseResult> {
-    validate_consumer_id(&params.consumer_id)?;
-
     info!(
         merchant_url = %params.merchant_url,
         consumer_id = %params.consumer_id,
         "Browsing merchant catalog"
     );
 
-    let url = parse_merchant_url(&params.merchant_url)?;
     let path = format!("/catalog?consumer_id={}", params.consumer_id);
 
-    let body = b"";
-    let signature = signer.sign_request(
+    execute_tap_request(
+        signer,
+        &params.merchant_url,
+        &params.consumer_id,
         "GET",
-        url.host_str().unwrap_or(""),
-        &path,
-        body,
+        path,
         InteractionType::Browse,
-    )?;
+    )
+    .await?;
+
+    info!("Browse catalog completed");
+
+    Ok(BrowseResult {
+        status: "completed".to_owned(),
+        data: "Catalog retrieved successfully".to_owned(),
+    })
+}
+
+/// Executes a TAP-authenticated HTTP request to a merchant.
+///
+/// This internal helper consolidates common logic for all MCP tools.
+async fn execute_tap_request(
+    signer: &TapSigner,
+    merchant_url: &str,
+    consumer_id: &str,
+    method: &str,
+    path: String,
+    interaction_type: InteractionType,
+) -> Result<()> {
+    validate_consumer_id(consumer_id)?;
+
+    let url = parse_merchant_url(merchant_url)?;
+    let authority = url.host_str().ok_or_else(|| {
+        BridgeError::InvalidMerchantUrl(format!("URL missing host: {merchant_url}"))
+    })?;
+
+    let body = b"";
+    let signature = signer.sign_request(method, authority, &path, body, interaction_type)?;
 
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(BridgeError::HttpError)?;
 
-    let response = client
-        .get(format!("{url}{path}"))
+    let request = match method {
+        "POST" => client.post(format!("{url}{path}")),
+        "GET" => client.get(format!("{url}{path}")),
+        _ => {
+            return Err(BridgeError::InvalidMerchantUrl(format!(
+                "unsupported HTTP method: {method}"
+            )));
+        }
+    };
+
+    let response = request
         .header("Signature", &signature.signature)
         .header("Signature-Input", &signature.signature_input)
         .header("Signature-Agent", &signature.agent_directory)
@@ -201,12 +214,7 @@ pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result
         )));
     }
 
-    info!(status = %response.status(), "Browse catalog completed");
-
-    Ok(BrowseResult {
-        status: "completed".to_owned(),
-        data: "Catalog retrieved successfully".to_owned(),
-    })
+    Ok(())
 }
 
 /// Validates consumer ID format.

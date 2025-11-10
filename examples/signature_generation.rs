@@ -5,7 +5,9 @@
 //!
 //! # Running this example
 //!
+//! First, generate and set a signing key:
 //! ```bash
+//! export AGENT_SIGNING_KEY=$(openssl rand -hex 32)
 //! cargo run --example signature_generation
 //! ```
 
@@ -18,16 +20,45 @@
     reason = "examples are allowed to use println and simple formatting"
 )]
 
+use std::env;
+
 use ed25519_dalek::SigningKey;
 use tap_mcp_bridge::tap::{InteractionType, TapSigner};
+
+/// Loads signing key from environment variable.
+///
+/// # Security Warning
+///
+/// Never hardcode signing keys. Always load from secure storage.
+fn load_signing_key() -> Result<SigningKey, Box<dyn std::error::Error>> {
+    let key_hex = env::var("AGENT_SIGNING_KEY").map_err(|_| {
+        "AGENT_SIGNING_KEY environment variable not set.\nGenerate a key with: openssl rand -hex \
+         32\nSet it with: export AGENT_SIGNING_KEY=<hex>"
+    })?;
+
+    let key_bytes = hex::decode(&key_hex)?;
+
+    if key_bytes.len() != 32 {
+        return Err("AGENT_SIGNING_KEY must be exactly 32 bytes (64 hex characters)".into());
+    }
+
+    let mut key_array = [0u8; 32];
+    key_array.copy_from_slice(&key_bytes);
+    Ok(SigningKey::from_bytes(&key_array))
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("TAP-MCP Bridge: Signature Generation Example\n");
 
-    // Step 1: Create Ed25519 signing key
-    println!("1. Creating Ed25519 signing key...");
-    let signing_key = SigningKey::from_bytes(&[0u8; 32]);
-    println!("   ✓ Key created");
+    println!("SECURITY NOTICE:");
+    println!("  Never hardcode signing keys in production code");
+    println!("  Always load from secure storage (HSM, secrets manager, environment)");
+    println!("  Never commit signing keys to version control\n");
+
+    // Step 1: Load Ed25519 signing key from environment
+    println!("1. Loading Ed25519 signing key from environment...");
+    let signing_key = load_signing_key()?;
+    println!("   ✓ Key loaded securely");
 
     // Step 2: Initialize TAP signer
     println!("\n2. Initializing TAP signer...");
