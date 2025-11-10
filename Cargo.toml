@@ -10,6 +10,9 @@ readme = "README.md"
 keywords = ["tap", "mcp", "bridge", "integration"]
 categories = ["development-tools"]
 
+[package.metadata.cargo-udeps.ignore]
+normal = ["rmcp"]  # Used in Phase 2+ for MCP server integration
+
 [dependencies]
 # MCP Protocol
 rmcp = "0.8"

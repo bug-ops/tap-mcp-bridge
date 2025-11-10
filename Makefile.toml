@@ -108,7 +108,8 @@ dependencies = [
     "format",
     "clippy",
     "test",
-    "deny"
+    "deny",
+    "udeps"
 ]
 
 [tasks.ci]
@@ -118,5 +119,6 @@ dependencies = [
     "clippy",
     "test",
     "deny",
+    "udeps",
     "doc"
 ]
