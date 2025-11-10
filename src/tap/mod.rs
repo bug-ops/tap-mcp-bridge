@@ -127,11 +127,8 @@
 //! let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
 //!
 //! // Generate ID token with consumer claims
-//! let token = signer.generate_id_token(
-//!     "user-456",
-//!     "https://merchant.example.com",
-//!     "nonce-unique-123"
-//! )?;
+//! let token =
+//!     signer.generate_id_token("user-456", "https://merchant.example.com", "nonce-unique-123")?;
 //!
 //! println!("ID Token: {}", token.token);
 //! println!("Consumer: {}", token.claims.sub);
