@@ -1,6 +1,6 @@
 //! MCP tools for TAP operations.
 
-use std::time::Duration;
+use std::{sync::LazyLock, time::Duration};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -10,6 +10,24 @@ use crate::{
     error::{BridgeError, Result},
     tap::{InteractionType, TapSigner},
 };
+
+/// Shared HTTP client for all TAP requests.
+///
+/// This static client is initialized once and reused across all requests,
+/// providing connection pooling and reducing per-request overhead.
+///
+/// The client is configured with:
+/// - 30-second timeout for all requests
+/// - Connection pooling (100 connections per host)
+/// - HTTP/2 support with connection reuse
+static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
+    Client::builder()
+        .timeout(Duration::from_secs(30))
+        .pool_max_idle_per_host(100)
+        .http2_prior_knowledge()
+        .build()
+        .expect("failed to create HTTP client")
+});
 
 /// Parameters for checkout operation.
 #[derive(Debug, Deserialize)]
@@ -184,10 +202,7 @@ async fn execute_tap_request(
     let body = b"";
     let signature = signer.sign_request(method, authority, &path, body, interaction_type)?;
 
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(BridgeError::HttpError)?;
+    let client = &*HTTP_CLIENT;
 
     let request = match method {
         "POST" => client.post(format!("{url}{path}")),
@@ -202,7 +217,7 @@ async fn execute_tap_request(
     let response = request
         .header("Signature", &signature.signature)
         .header("Signature-Input", &signature.signature_input)
-        .header("Signature-Agent", &signature.agent_directory)
+        .header("Signature-Agent", signature.agent_directory.as_ref())
         .header("Content-Digest", compute_content_digest(body))
         .send()
         .await?;

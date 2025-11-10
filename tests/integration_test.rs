@@ -30,7 +30,8 @@ fn test_signature_generation_end_to_end() {
         "signature should use ed25519 algorithm"
     );
     assert_eq!(
-        signature.agent_directory, "https://agent.example.com",
+        signature.agent_directory.as_ref(),
+        "https://agent.example.com",
         "agent directory should be preserved"
     );
 }

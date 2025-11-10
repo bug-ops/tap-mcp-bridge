@@ -1,6 +1,6 @@
 //! TAP signature generation using RFC 9421 HTTP Message Signatures.
 
-use std::time::SystemTime;
+use std::{sync::Arc, time::SystemTime};
 
 use ed25519_dalek::{Signer, SigningKey};
 use sha2::{Digest, Sha256};
@@ -35,8 +35,8 @@ pub struct TapSignature {
     pub signature: String,
     /// Signature-Input header value.
     pub signature_input: String,
-    /// Agent directory URL.
-    pub agent_directory: String,
+    /// Agent directory URL (shared reference to avoid cloning).
+    pub agent_directory: Arc<str>,
     /// Nonce used in this signature (for replay protection).
     pub nonce: String,
 }
@@ -47,7 +47,7 @@ pub struct TapSigner {
     signing_key: SigningKey,
     #[allow(dead_code, reason = "reserved for future use in Phase 2")]
     agent_id: String,
-    agent_directory: String,
+    agent_directory: Arc<str>,
 }
 
 impl TapSigner {
@@ -67,7 +67,7 @@ impl TapSigner {
         Self {
             signing_key,
             agent_id: agent_id.to_owned(),
-            agent_directory: agent_directory.to_owned(),
+            agent_directory: Arc::from(agent_directory),
         }
     }
 
@@ -149,7 +149,7 @@ impl TapSigner {
         Ok(TapSignature {
             signature: format!("sig1=:{signature_b64}:"),
             signature_input,
-            agent_directory: self.agent_directory.clone(),
+            agent_directory: Arc::clone(&self.agent_directory),
             nonce,
         })
     }
@@ -358,7 +358,7 @@ mod tests {
         assert!(signature.signature_input.contains("expires="));
         assert!(signature.signature_input.contains("nonce="));
         assert!(signature.signature_input.contains("tag=\"agent-payer-auth\""));
-        assert_eq!(signature.agent_directory, "https://test.com");
+        assert_eq!(signature.agent_directory.as_ref(), "https://test.com");
     }
 
     #[test]
@@ -492,8 +492,8 @@ mod tests {
         assert!(sig2.signature_input.contains(&keyid));
 
         // Agent directory should be consistent
-        assert_eq!(sig1.agent_directory, "https://test.com");
-        assert_eq!(sig2.agent_directory, "https://test.com");
+        assert_eq!(sig1.agent_directory.as_ref(), "https://test.com");
+        assert_eq!(sig2.agent_directory.as_ref(), "https://test.com");
 
         // Nonces should be different (replay protection)
         assert_ne!(sig1.nonce, sig2.nonce);
