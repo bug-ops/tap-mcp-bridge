@@ -45,6 +45,11 @@ async fn test_checkout_with_invalid_url() {
         merchant_url: "http://insecure.com".into(),
         consumer_id: "user-123".into(),
         intent: "payment".into(),
+        country_code: "US".into(),
+        zip: "94103".into(),
+        ip_address: "192.168.1.100".into(),
+        user_agent: "Mozilla/5.0".into(),
+        platform: "Linux".into(),
     };
 
     let result = checkout_with_tap(&signer, params).await;
@@ -61,6 +66,11 @@ async fn test_checkout_params_validation() {
         merchant_url: "not a url".into(),
         consumer_id: "user-123".into(),
         intent: "payment".into(),
+        country_code: "US".into(),
+        zip: "94103".into(),
+        ip_address: "192.168.1.100".into(),
+        user_agent: "Mozilla/5.0".into(),
+        platform: "Linux".into(),
     };
 
     let result = checkout_with_tap(&signer, params).await;

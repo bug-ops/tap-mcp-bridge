@@ -68,6 +68,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         merchant_url: "http://merchant.example.com".to_string(),
         consumer_id: "user-123".to_string(),
         intent: "payment".to_string(),
+        country_code: "US".to_string(),
+        zip: "94103".to_string(),
+        ip_address: "192.168.1.100".to_string(),
+        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_string(),
+        platform: "Linux".to_string(),
     };
 
     match checkout_with_tap(&signer, params).await {
@@ -85,6 +90,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         merchant_url: "https://localhost:8080/checkout".to_string(),
         consumer_id: "user-123".to_string(),
         intent: "payment".to_string(),
+        country_code: "US".to_string(),
+        zip: "94103".to_string(),
+        ip_address: "192.168.1.100".to_string(),
+        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_string(),
+        platform: "Linux".to_string(),
     };
 
     match checkout_with_tap(&signer, params).await {
@@ -102,6 +112,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         merchant_url: "https://merchant.example.com/checkout".to_string(),
         consumer_id: "user-123".to_string(),
         intent: "payment".to_string(),
+        country_code: "US".to_string(),
+        zip: "94103".to_string(),
+        ip_address: "192.168.1.100".to_string(),
+        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_string(),
+        platform: "Linux".to_string(),
     };
 
     match checkout_with_tap(&signer, params).await {
@@ -131,6 +146,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         merchant_url: "https://merchant.example.com/api/checkout".to_string(),
         consumer_id: "user-789".to_string(),
         intent: "browsing".to_string(),
+        country_code: "US".to_string(),
+        zip: "94103".to_string(),
+        ip_address: "192.168.1.100".to_string(),
+        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_string(),
+        platform: "Linux".to_string(),
     })
     .await;
 

@@ -251,6 +251,65 @@ impl TapSigner {
         crate::tap::jwt::IdToken::create(&claims, &self.signing_key)
     }
 
+    /// Generates an ACRO for TAP authentication.
+    ///
+    /// The ACRO (Agentic Consumer Recognition Object) identifies the consumer
+    /// on whose behalf the agent is acting and provides verification of consumer
+    /// identity with contextual data.
+    ///
+    /// # Arguments
+    ///
+    /// * `nonce` - Nonce (should match HTTP signature nonce)
+    /// * `id_token` - JWT ID token string
+    /// * `contextual_data` - Consumer location and device data
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BridgeError::CryptoError`] if ACRO generation fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ed25519_dalek::SigningKey;
+    /// use tap_mcp_bridge::tap::{
+    ///     TapSigner,
+    ///     acro::{ContextualData, DeviceData},
+    /// };
+    ///
+    /// # fn example() -> tap_mcp_bridge::error::Result<()> {
+    /// let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+    /// let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+    ///
+    /// // Generate ID token first
+    /// let id_token = signer.generate_id_token("user-456", "https://merchant.com", "nonce-123")?;
+    ///
+    /// // Create contextual data
+    /// let contextual_data = ContextualData {
+    ///     country_code: "US".to_owned(),
+    ///     zip: "94103".to_owned(),
+    ///     ip_address: "192.168.1.100".to_owned(),
+    ///     device_data: DeviceData {
+    ///         user_agent: "Mozilla/5.0".to_owned(),
+    ///         platform: "Linux".to_owned(),
+    ///     },
+    /// };
+    ///
+    /// // Generate ACRO
+    /// let acro = signer.generate_acro("nonce-123", &id_token.token, contextual_data)?;
+    /// assert_eq!(acro.nonce, "nonce-123");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn generate_acro(
+        &self,
+        nonce: &str,
+        id_token: &str,
+        contextual_data: crate::tap::acro::ContextualData,
+    ) -> Result<crate::tap::acro::Acro> {
+        let kid = self.compute_keyid();
+        crate::tap::acro::Acro::create(nonce, id_token, contextual_data, &kid, &self.signing_key)
+    }
+
     /// Computes JWK thumbprint for keyid.
     fn compute_keyid(&self) -> String {
         let verifying_key = self.signing_key.verifying_key();
@@ -741,5 +800,104 @@ mod tests {
 
         // Verify nonces match (enables correlation)
         assert_eq!(token.claims.nonce, signature.nonce);
+    }
+
+    #[test]
+    fn test_generate_acro() {
+        use crate::tap::acro::{ContextualData, DeviceData};
+
+        let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+        let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+
+        // Generate ID token
+        let id_token = signer
+            .generate_id_token("user-456", "https://merchant.com", "nonce-789")
+            .unwrap();
+
+        // Create contextual data
+        let contextual_data = ContextualData {
+            country_code: "US".to_owned(),
+            zip: "94103".to_owned(),
+            ip_address: "192.168.1.100".to_owned(),
+            device_data: DeviceData {
+                user_agent: "Mozilla/5.0".to_owned(),
+                platform: "Linux".to_owned(),
+            },
+        };
+
+        // Generate ACRO
+        let acro = signer.generate_acro("nonce-789", &id_token.token, contextual_data);
+
+        assert!(acro.is_ok());
+        let acro = acro.unwrap();
+        assert_eq!(acro.nonce, "nonce-789");
+        assert_eq!(acro.id_token, id_token.token);
+        assert_eq!(acro.alg, "ed25519");
+        assert!(!acro.signature.is_empty());
+    }
+
+    #[test]
+    fn test_generate_acro_kid_matches_signature_keyid() {
+        use crate::tap::acro::{ContextualData, DeviceData};
+
+        let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+        let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+
+        // Generate HTTP signature to get keyid
+        let signature = signer
+            .sign_request("POST", "merchant.com", "/checkout", b"test", InteractionType::Checkout)
+            .unwrap();
+
+        // Extract keyid from signature_input
+        let keyid_start = signature.signature_input.find("keyid=\"").unwrap();
+        let keyid_str = signature.signature_input.get(keyid_start + 7..).unwrap();
+        let keyid_end = keyid_str.find('"').unwrap();
+        let keyid = keyid_str.get(..keyid_end).unwrap();
+
+        // Generate ACRO
+        let id_token = signer.generate_id_token("user", "https://m.com", "nonce").unwrap();
+        let contextual_data = ContextualData {
+            country_code: "US".to_owned(),
+            zip: "12345".to_owned(),
+            ip_address: "1.2.3.4".to_owned(),
+            device_data: DeviceData { user_agent: "Test".to_owned(), platform: "Test".to_owned() },
+        };
+        let acro = signer.generate_acro("nonce", &id_token.token, contextual_data).unwrap();
+
+        // Verify ACRO kid matches signature keyid
+        assert_eq!(acro.kid, keyid, "ACRO kid must match HTTP signature keyid");
+    }
+
+    #[test]
+    fn test_generate_acro_nonce_correlation() {
+        use crate::tap::acro::{ContextualData, DeviceData};
+
+        let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+        let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+
+        // Generate HTTP signature with nonce
+        let signature = signer
+            .sign_request("POST", "merchant.com", "/checkout", b"test", InteractionType::Checkout)
+            .unwrap();
+
+        // Generate ID token with same nonce
+        let id_token = signer
+            .generate_id_token("user", "https://merchant.com", &signature.nonce)
+            .unwrap();
+
+        // Generate ACRO with same nonce
+        let contextual_data = ContextualData {
+            country_code: "US".to_owned(),
+            zip: "12345".to_owned(),
+            ip_address: "1.2.3.4".to_owned(),
+            device_data: DeviceData { user_agent: "Test".to_owned(), platform: "Test".to_owned() },
+        };
+        let acro = signer
+            .generate_acro(&signature.nonce, &id_token.token, contextual_data)
+            .unwrap();
+
+        // Verify all three share the same nonce
+        assert_eq!(signature.nonce, id_token.claims.nonce);
+        assert_eq!(signature.nonce, acro.nonce);
     }
 }

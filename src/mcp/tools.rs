@@ -51,6 +51,18 @@ pub struct CheckoutParams {
     pub consumer_id: String,
     /// Purchase intent.
     pub intent: String,
+
+    // ACRO contextual data fields
+    /// ISO 3166-1 alpha-2 country code (e.g., "US").
+    pub country_code: String,
+    /// Postal code or city/state (max 16 chars).
+    pub zip: String,
+    /// Consumer device IP address.
+    pub ip_address: String,
+    /// Browser/device user agent.
+    pub user_agent: String,
+    /// Operating system platform.
+    pub platform: String,
 }
 
 /// Result of checkout operation.
@@ -69,6 +81,18 @@ pub struct BrowseParams {
     pub merchant_url: String,
     /// Consumer identifier.
     pub consumer_id: String,
+
+    // ACRO contextual data fields
+    /// ISO 3166-1 alpha-2 country code (e.g., "US").
+    pub country_code: String,
+    /// Postal code or city/state (max 16 chars).
+    pub zip: String,
+    /// Consumer device IP address.
+    pub ip_address: String,
+    /// Browser/device user agent.
+    pub user_agent: String,
+    /// Operating system platform.
+    pub platform: String,
 }
 
 /// Result of browse merchant operation.
@@ -123,13 +147,25 @@ pub async fn checkout_with_tap(
 
     let path = format!("/checkout?consumer_id={}&intent={}", params.consumer_id, params.intent);
 
-    execute_tap_request(
+    // Create contextual data from params
+    let contextual_data = crate::tap::acro::ContextualData {
+        country_code: params.country_code,
+        zip: params.zip,
+        ip_address: params.ip_address,
+        device_data: crate::tap::acro::DeviceData {
+            user_agent: params.user_agent,
+            platform: params.platform,
+        },
+    };
+
+    execute_tap_request_with_acro(
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "POST",
         path,
         InteractionType::Checkout,
+        contextual_data,
     )
     .await?;
 
@@ -185,13 +221,25 @@ pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result
 
     let path = format!("/catalog?consumer_id={}", params.consumer_id);
 
-    execute_tap_request(
+    // Create contextual data from params
+    let contextual_data = crate::tap::acro::ContextualData {
+        country_code: params.country_code,
+        zip: params.zip,
+        ip_address: params.ip_address,
+        device_data: crate::tap::acro::DeviceData {
+            user_agent: params.user_agent,
+            platform: params.platform,
+        },
+    };
+
+    execute_tap_request_with_acro(
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "GET",
         path,
         InteractionType::Browse,
+        contextual_data,
     )
     .await?;
 
@@ -208,9 +256,80 @@ pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result
     })
 }
 
-/// Executes a TAP-authenticated HTTP request to a merchant.
+/// Executes a TAP-authenticated HTTP request with ACRO to a merchant.
 ///
-/// This internal helper consolidates common logic for all MCP tools.
+/// This is the new Phase 4D implementation that includes ACRO in the request body.
+async fn execute_tap_request_with_acro(
+    signer: &TapSigner,
+    merchant_url: &str,
+    consumer_id: &str,
+    method: &str,
+    path: String,
+    interaction_type: InteractionType,
+    contextual_data: crate::tap::acro::ContextualData,
+) -> Result<()> {
+    validate_consumer_id(consumer_id)?;
+
+    let url = parse_merchant_url(merchant_url)?;
+    let authority = url.host_str().ok_or_else(|| {
+        BridgeError::InvalidMerchantUrl(format!("URL missing host: {merchant_url}"))
+    })?;
+
+    // Generate nonce for signature (will be reused in ACRO and ID token)
+    let nonce = uuid::Uuid::new_v4().to_string();
+
+    // Generate ID token
+    let id_token = signer.generate_id_token(consumer_id, merchant_url, &nonce)?;
+
+    // Generate ACRO with same nonce
+    let acro = signer.generate_acro(&nonce, &id_token.token, contextual_data)?;
+
+    // Serialize ACRO to JSON body
+    let body = serde_json::to_vec(&acro)
+        .map_err(|e| BridgeError::CryptoError(format!("ACRO serialization failed: {e}")))?;
+
+    // Generate signature including body digest
+    let signature = signer.sign_request(method, authority, &path, &body, interaction_type)?;
+
+    let client = &*HTTP_CLIENT;
+
+    let request = match method {
+        "POST" => client.post(format!("{url}{path}")),
+        "GET" => client.get(format!("{url}{path}")),
+        _ => {
+            return Err(BridgeError::InvalidMerchantUrl(format!(
+                "unsupported HTTP method: {method}"
+            )));
+        }
+    };
+
+    let content_digest = TapSigner::compute_content_digest(&body);
+
+    let response = request
+        .header("Signature", &signature.signature)
+        .header("Signature-Input", &signature.signature_input)
+        .header("Signature-Agent", signature.agent_directory.as_ref())
+        .header("Content-Digest", &content_digest)
+        .header("Content-Type", "application/json")
+        .body(body)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        return Err(BridgeError::MerchantError(format!(
+            "merchant returned status {}",
+            response.status()
+        )));
+    }
+
+    Ok(())
+}
+
+/// Executes a TAP-authenticated HTTP request to a merchant (legacy, no ACRO).
+///
+/// This internal helper is kept for backward compatibility with older merchants
+/// that don't support ACRO. New code should use `execute_tap_request_with_acro`.
+#[allow(dead_code, reason = "kept for backward compatibility")]
 async fn execute_tap_request(
     signer: &TapSigner,
     merchant_url: &str,

@@ -81,10 +81,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         merchant_url: "https://merchant.example.com".to_string(),
         consumer_id: "user-456".to_string(),
         intent: "payment".to_string(),
+        // ACRO contextual data
+        country_code: "US".to_string(),
+        zip: "94103".to_string(),
+        ip_address: "192.168.1.100".to_string(),
+        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_string(),
+        platform: "Linux".to_string(),
     };
     println!("   Merchant: {}", params.merchant_url);
     println!("   Consumer: {}", params.consumer_id);
     println!("   Intent: {}", params.intent);
+    println!("   Location: {} {}", params.country_code, params.zip);
 
     // Step 4: Execute TAP-authenticated checkout
     println!("\n4. Executing checkout with TAP signature...");
