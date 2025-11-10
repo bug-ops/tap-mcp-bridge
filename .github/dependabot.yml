@@ -84,7 +84,7 @@ updates:
           - "patch"
 
     # Versioning strategy for automatic PRs
-    versioning-strategy: "increase"
+    versioning-strategy: "auto"
 
     # Allow version requirements to be increased
     allow:
