@@ -310,6 +310,64 @@ impl TapSigner {
         crate::tap::acro::Acro::create(nonce, id_token, contextual_data, &kid, &self.signing_key)
     }
 
+    /// Generates an APC for TAP payment transactions.
+    ///
+    /// The APC (Agentic Payment Container) contains encrypted payment credentials
+    /// and authorization for transaction processing. Payment data is encrypted
+    /// before transmission per PCI-DSS requirements.
+    ///
+    /// # Arguments
+    ///
+    /// * `nonce` - Nonce (should match HTTP signature nonce)
+    /// * `payment_method` - Payment method with credentials
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BridgeError::CryptoError`] if APC generation or encryption fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ed25519_dalek::SigningKey;
+    /// use tap_mcp_bridge::tap::{
+    ///     TapSigner,
+    ///     apc::{CardData, PaymentMethod},
+    /// };
+    ///
+    /// # fn example() -> tap_mcp_bridge::error::Result<()> {
+    /// let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+    /// let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+    ///
+    /// // Create card payment method
+    /// let card = CardData {
+    ///     number: "4111111111111111".to_owned(),
+    ///     exp_month: "12".to_owned(),
+    ///     exp_year: "25".to_owned(),
+    ///     cvv: "123".to_owned(),
+    ///     cardholder_name: "John Doe".to_owned(),
+    /// };
+    /// let payment_method = PaymentMethod::Card(card);
+    ///
+    /// // Generate APC
+    /// let apc = signer.generate_apc("nonce-123", &payment_method)?;
+    /// assert_eq!(apc.nonce, "nonce-123");
+    /// assert_eq!(apc.alg, "ed25519");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn generate_apc(
+        &self,
+        nonce: &str,
+        payment_method: &crate::tap::apc::PaymentMethod,
+    ) -> Result<crate::tap::apc::Apc> {
+        // Encrypt payment method data
+        let encrypted_payment_data = payment_method.encrypt()?;
+
+        // Generate APC with signature
+        let kid = self.compute_keyid();
+        crate::tap::apc::Apc::create(nonce, &encrypted_payment_data, &kid, &self.signing_key)
+    }
+
     /// Computes JWK thumbprint for keyid.
     fn compute_keyid(&self) -> String {
         let verifying_key = self.signing_key.verifying_key();
