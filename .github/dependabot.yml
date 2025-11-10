@@ -1,11 +1,122 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
 version: 2
 updates:
-  - package-ecosystem: "cargo" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Cargo dependencies - Rust crates
+  - package-ecosystem: "cargo"
+    directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: Etc/GMT0
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Group related updates to reduce PR noise
+    groups:
+      # Security patches - always separate for immediate review
+      security-updates:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+
+      # Async runtime ecosystem
+      tokio-ecosystem:
+        patterns:
+          - "tokio*"
+          - "futures*"
+          - "async-trait"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Serialization ecosystem
+      serde-ecosystem:
+        patterns:
+          - "serde*"
+          - "serde_json"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Cryptography dependencies (critical - separate for review)
+      crypto:
+        patterns:
+          - "ed25519-dalek"
+          - "sha2"
+          - "jsonwebtoken"
+          - "josekit"
+          - "zeroize"
+          - "secrecy"
+        update-types:
+          - "patch"
+
+      # HTTP client ecosystem
+      http-ecosystem:
+        patterns:
+          - "reqwest"
+          - "url"
+          - "hyper*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # MCP protocol
+      mcp:
+        patterns:
+          - "rmcp"
+        # Keep separate for careful review of protocol changes
+
+      # Development tools
+      dev-tools:
+        patterns:
+          - "thiserror"
+          - "tracing*"
+          - "base64"
+          - "hex"
+          - "uuid"
+        update-types:
+          - "minor"
+          - "patch"
+
+    # Versioning strategy for automatic PRs
+    versioning-strategy: "increase"
+
+    # Allow version requirements to be increased
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+
+    # Ignore specific dependencies if needed (uncomment to use)
+    # ignore:
+    #   - dependency-name: "some-crate"
+    #     versions: ["1.x"]
+
+  # GitHub Actions workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: Etc/GMT0
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    # Group all GitHub Actions updates together
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
