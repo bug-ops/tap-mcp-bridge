@@ -114,6 +114,35 @@
 //! - [RFC 7517 (JSON Web Key)](https://www.rfc-editor.org/rfc/rfc7517.html)
 //! - [RFC 7638 (JWK Thumbprint)](https://www.rfc-editor.org/rfc/rfc7638.html)
 //!
+//! # ID Token (JWT) Generation
+//!
+//! TAP agents generate JWT ID tokens to authenticate consumers:
+//!
+//! ```rust
+//! use ed25519_dalek::SigningKey;
+//! use tap_mcp_bridge::tap::TapSigner;
+//!
+//! # fn example() -> tap_mcp_bridge::error::Result<()> {
+//! let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+//! let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+//!
+//! // Generate ID token with consumer claims
+//! let token = signer.generate_id_token(
+//!     "user-456",
+//!     "https://merchant.example.com",
+//!     "nonce-unique-123"
+//! )?;
+//!
+//! println!("ID Token: {}", token.token);
+//! println!("Consumer: {}", token.claims.sub);
+//! println!("Expires: {}", token.claims.exp);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! The ID token includes standard JWT claims (iss, sub, aud, exp, iat, nonce)
+//! and can be verified by merchants using the agent's public key.
+//!
 //! # TAP Compliance
 //!
 //! This implementation satisfies the following TAP specification requirements:
@@ -123,7 +152,7 @@
 //! - ✅ Timestamp expiration (8-minute maximum window)
 //! - ✅ JWK Thumbprint key identifiers (RFC 7638)
 //! - ✅ Public Key Directory (JWKS at `/.well-known/http-message-signatures-directory`)
-//! - ⏳ ID Token (JWT) - planned Phase 4C
+//! - ✅ ID Token (JWT) generation for consumer authentication
 //! - ⏳ Agentic Consumer Recognition Object (ACRO) - planned Phase 4D
 //! - ⏳ Agentic Payment Container (APC) - planned Phase 4E
 

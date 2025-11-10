@@ -197,7 +197,12 @@
 //! - ✅ Input validation (URL sanitization, consumer ID format)
 //! - ✅ Comprehensive test suite (50+ tests)
 //!
-//! **TAP Compliance**: 15/18 requirements (83%)
+//! **TAP Compliance**: 16/18 requirements (89%)
+//!
+//! **Completed Components**:
+//! - ✅ RFC 9421 HTTP Message Signatures with Ed25519
+//! - ✅ Public Key Directory (JWKS)
+//! - ✅ ID Token (JWT) generation
 //!
 //! **Future Phases**:
 //! - Phase 3: Production readiness (Agentic Consumer Recognition, Payment Container)

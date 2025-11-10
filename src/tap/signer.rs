@@ -200,6 +200,57 @@ impl TapSigner {
         crate::tap::jwk::Jwks::new(jwk)
     }
 
+    /// Generates an ID token for TAP authentication.
+    ///
+    /// The ID token authenticates the agent and delegates consumer authority.
+    /// It uses the same Ed25519 key as HTTP signatures and shares the same nonce
+    /// for correlation between the authentication token and request signature.
+    ///
+    /// # Arguments
+    ///
+    /// * `consumer_id` - Consumer identifier (subject of the token)
+    /// * `merchant_url` - Merchant URL (audience of the token)
+    /// * `nonce` - Nonce for replay protection (should match HTTP signature nonce)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BridgeError::CryptoError`] if token generation fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ed25519_dalek::SigningKey;
+    /// use tap_mcp_bridge::tap::TapSigner;
+    ///
+    /// # fn example() -> tap_mcp_bridge::error::Result<()> {
+    /// let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+    /// let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+    ///
+    /// let token =
+    ///     signer.generate_id_token("user-456", "https://merchant.example.com", "nonce-789")?;
+    ///
+    /// assert!(token.token.starts_with("eyJ")); // JWT format
+    /// assert_eq!(token.claims.sub, "user-456");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn generate_id_token(
+        &self,
+        consumer_id: &str,
+        merchant_url: &str,
+        nonce: &str,
+    ) -> Result<crate::tap::jwt::IdToken> {
+        let claims = crate::tap::jwt::IdTokenClaims::new(
+            consumer_id,
+            &self.agent_id,
+            merchant_url,
+            nonce,
+            Some(self.agent_directory.as_ref()),
+        );
+
+        crate::tap::jwt::IdToken::create(&claims, &self.signing_key)
+    }
+
     /// Computes JWK thumbprint for keyid.
     fn compute_keyid(&self) -> String {
         let verifying_key = self.signing_key.verifying_key();
@@ -639,5 +690,56 @@ mod tests {
         // Different interaction types should produce different tags
         assert!(sig1.signature_input.contains("agent-payer-auth"));
         assert!(sig3.signature_input.contains("agent-browser-auth"));
+    }
+
+    #[test]
+    fn test_generate_id_token() {
+        let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+        let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+
+        let token =
+            signer.generate_id_token("user-456", "https://merchant.example.com", "nonce-789");
+
+        assert!(token.is_ok());
+        let id_token = token.unwrap();
+        assert_eq!(id_token.claims.sub, "user-456");
+        assert_eq!(id_token.claims.iss, "agent-123");
+        assert_eq!(id_token.claims.aud, "https://merchant.example.com");
+        assert_eq!(id_token.claims.nonce, "nonce-789");
+        assert_eq!(id_token.claims.agent_directory, Some("https://agent.example.com".to_owned()));
+        assert!(id_token.token.starts_with("eyJ"));
+    }
+
+    #[test]
+    fn test_generate_id_token_format() {
+        let signing_key = SigningKey::from_bytes(&[1u8; 32]);
+        let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+
+        let token = signer
+            .generate_id_token("consumer", "https://merchant.com", "nonce-unique")
+            .unwrap();
+
+        // Verify JWT format
+        let parts: Vec<&str> = token.token.split('.').collect();
+        assert_eq!(parts.len(), 3, "JWT must have 3 parts");
+    }
+
+    #[test]
+    fn test_generate_id_token_nonce_matches_signature() {
+        let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+        let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+
+        // Generate HTTP signature
+        let signature = signer
+            .sign_request("POST", "merchant.com", "/checkout", b"test", InteractionType::Checkout)
+            .unwrap();
+
+        // Generate ID token with same nonce
+        let token = signer
+            .generate_id_token("user", "https://merchant.com", &signature.nonce)
+            .unwrap();
+
+        // Verify nonces match (enables correlation)
+        assert_eq!(token.claims.nonce, signature.nonce);
     }
 }

@@ -22,6 +22,7 @@ allow = [
     "ISC",
     "Unicode-DFS-2016",
     "Unicode-3.0",
+    "OpenSSL",
 ]
 confidence-threshold = 0.8
 
@@ -30,6 +31,13 @@ name = "ring"
 expression = "MIT AND ISC AND OpenSSL"
 license-files = [
     { path = "LICENSE", hash = 0xbd0eed23 }
+]
+
+[[licenses.clarify]]
+name = "aws-lc-sys"
+expression = "ISC AND (Apache-2.0 OR ISC) AND OpenSSL"
+license-files = [
+    { path = "LICENSE", hash = 0xbec4b0cb }
 ]
 
 [licenses.private]
