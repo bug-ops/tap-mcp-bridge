@@ -84,6 +84,36 @@
 //! - **HTTPS Only**: TAP signatures MUST be sent over HTTPS
 //! - **No Key Reuse**: Each agent should have unique keys per merchant (recommended)
 //!
+//! # Public Key Distribution
+//!
+//! TAP agents must expose their public keys at
+//! `/.well-known/http-message-signatures-directory` in JWKS format
+//! to enable merchants to verify agent signatures.
+//!
+//! Use [`TapSigner::generate_jwks`] to create a JWKS for your agent:
+//!
+//! ```rust
+//! use ed25519_dalek::SigningKey;
+//! use tap_mcp_bridge::tap::TapSigner;
+//!
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+//! let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+//!
+//! // Generate JWKS for agent directory
+//! let jwks = signer.generate_jwks();
+//! let json = jwks.to_json()?;
+//!
+//! // Serve this JSON at /.well-known/http-message-signatures-directory
+//! println!("{}", json);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! See also:
+//! - [RFC 7517 (JSON Web Key)](https://www.rfc-editor.org/rfc/rfc7517.html)
+//! - [RFC 7638 (JWK Thumbprint)](https://www.rfc-editor.org/rfc/rfc7638.html)
+//!
 //! # TAP Compliance
 //!
 //! This implementation satisfies the following TAP specification requirements:
@@ -92,9 +122,13 @@
 //! - ✅ Nonce generation for replay protection
 //! - ✅ Timestamp expiration (8-minute maximum window)
 //! - ✅ JWK Thumbprint key identifiers (RFC 7638)
-//! - ⏳ Agentic Consumer Recognition Object (planned Phase 3)
-//! - ⏳ Agentic Payment Container (planned Phase 3)
+//! - ✅ Public Key Directory (JWKS at `/.well-known/http-message-signatures-directory`)
+//! - ⏳ ID Token (JWT) - planned Phase 4C
+//! - ⏳ Agentic Consumer Recognition Object (ACRO) - planned Phase 4D
+//! - ⏳ Agentic Payment Container (APC) - planned Phase 4E
 
+pub mod jwk;
+pub mod jwt;
 pub mod signer;
 
 pub use signer::{InteractionType, TapSigner};

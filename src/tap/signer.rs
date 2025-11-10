@@ -175,6 +175,31 @@ impl TapSigner {
         format!("sha-256=:{hash_b64}:")
     }
 
+    /// Generates a JWKS containing this signer's public key.
+    ///
+    /// The JWKS can be served at `/.well-known/http-message-signatures-directory`
+    /// to enable merchants to verify agent signatures.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ed25519_dalek::SigningKey;
+    /// use tap_mcp_bridge::tap::TapSigner;
+    ///
+    /// let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+    /// let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+    ///
+    /// let jwks = signer.generate_jwks();
+    /// let json = jwks.to_json().unwrap();
+    /// assert!(json.contains("\"kty\": \"OKP\""));
+    /// ```
+    #[must_use]
+    pub fn generate_jwks(&self) -> crate::tap::jwk::Jwks {
+        let verifying_key = self.signing_key.verifying_key();
+        let jwk = crate::tap::jwk::Jwk::from_verifying_key(&verifying_key);
+        crate::tap::jwk::Jwks::new(jwk)
+    }
+
     /// Computes JWK thumbprint for keyid.
     fn compute_keyid(&self) -> String {
         let verifying_key = self.signing_key.verifying_key();
@@ -541,6 +566,53 @@ mod tests {
         assert!(sig.signature_input.contains(";alg=\"ed25519\""));
         assert!(sig.signature_input.contains(";nonce=\""));
         assert!(sig.signature_input.contains(";tag=\"agent-payer-auth\""));
+    }
+
+    #[test]
+    fn test_generate_jwks() {
+        let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+        let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
+
+        let jwks = signer.generate_jwks();
+        assert_eq!(jwks.keys.len(), 1);
+
+        let jwk = &jwks.keys[0];
+        assert_eq!(jwk.kty, "OKP");
+        assert_eq!(jwk.crv, "Ed25519");
+        assert_eq!(jwk.alg, "EdDSA");
+        assert_eq!(jwk.key_use, "verify");
+
+        // Verify JSON serialization
+        let json = jwks.to_json().expect("serialization should succeed");
+        assert!(json.contains("\"kty\": \"OKP\""));
+        assert!(json.contains("\"crv\": \"Ed25519\""));
+    }
+
+    #[test]
+    fn test_generate_jwks_kid_matches_signature_keyid() {
+        let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+        let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
+
+        // Generate JWKS
+        let jwks = signer.generate_jwks();
+        let jwk_kid = &jwks.keys[0].kid;
+
+        // Generate signature to get keyid
+        let signature = signer
+            .sign_request("POST", "test.com", "/test", b"test", InteractionType::Browse)
+            .expect("signature generation should succeed");
+
+        // Extract keyid from signature_input
+        let keyid_start =
+            signature.signature_input.find("keyid=\"").expect("keyid should be present");
+        let keyid_str = signature
+            .signature_input
+            .get(keyid_start + 7..)
+            .expect("keyid string should be valid");
+        let keyid_end = keyid_str.find('"').expect("keyid should be quoted");
+        let keyid = keyid_str.get(..keyid_end).expect("keyid should be valid");
+
+        assert_eq!(jwk_kid, keyid, "JWK kid must match signature keyid");
     }
 
     #[test]

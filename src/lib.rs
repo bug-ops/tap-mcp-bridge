@@ -124,6 +124,26 @@
 //! # }
 //! ```
 //!
+//! ## 4. Generate JWKS for Agent Directory
+//!
+//! ```rust
+//! use ed25519_dalek::SigningKey;
+//! use tap_mcp_bridge::tap::TapSigner;
+//!
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+//! let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+//!
+//! // Generate JWKS for public key distribution
+//! let jwks = signer.generate_jwks();
+//! let json = jwks.to_json()?;
+//!
+//! // Serve this at /.well-known/http-message-signatures-directory
+//! println!("{}", json);
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! # Module Organization
 //!
 //! - [`tap`]: TAP protocol implementation (RFC 9421 signatures, Ed25519 signing)
@@ -172,11 +192,12 @@
 //! - ✅ Replay attack prevention (unique nonce per request)
 //! - ✅ Signature expiration (8-minute maximum window)
 //! - ✅ Interaction type tags (browser-auth, payer-auth)
+//! - ✅ Public Key Directory (JWKS at `/.well-known/http-message-signatures-directory`)
 //! - ✅ Network error handling with 30-second timeout
 //! - ✅ Input validation (URL sanitization, consumer ID format)
-//! - ✅ Comprehensive test suite (39 tests)
+//! - ✅ Comprehensive test suite (50+ tests)
 //!
-//! **TAP Compliance**: 14/18 requirements (78%)
+//! **TAP Compliance**: 15/18 requirements (83%)
 //!
 //! **Future Phases**:
 //! - Phase 3: Production readiness (Agentic Consumer Recognition, Payment Container)
@@ -188,6 +209,7 @@
 //! - `basic_checkout.rs`: Simple checkout flow
 //! - `error_handling.rs`: Handling common errors
 //! - `multi_merchant.rs`: Working with multiple merchants
+//! - `jwks_generation.rs`: Generating JWKS for agent directory
 //!
 //! # Error Handling
 //!

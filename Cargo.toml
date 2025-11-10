@@ -40,6 +40,12 @@ thiserror = "1.0"
 # Logging (basic only)
 tracing = "0.1"
 
+# JWT/JWK support for TAP
+jsonwebtoken = "9.2"
+
+# Sensitive data handling (for Phase 4D/4E later)
+secrecy = { version = "0.8", features = ["serde"] }
+
 [dev-dependencies]
 hex = "0.4"
 tokio = { version = "1.35", features = ["rt", "rt-multi-thread", "macros"] }
