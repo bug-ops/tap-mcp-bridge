@@ -17,6 +17,7 @@
 //!
 //! - [`TapSigner`]: Generates RFC 9421 signatures for HTTP requests
 //! - [`TapSignature`](signer::TapSignature): Signature output (headers ready for HTTP)
+//! - [`InteractionType`]: Specifies signature tag (browsing vs checkout)
 //!
 //! # Signature Components
 //!
@@ -26,22 +27,40 @@
 //! - `@path`: Request path
 //! - `content-digest`: SHA-256 hash of request body
 //!
+//! # TAP Required Parameters
+//!
+//! Each signature includes TAP-specific parameters:
+//! - `created`: Unix timestamp when signature was generated
+//! - `expires`: Signature expiration (created + 480 seconds max)
+//! - `nonce`: Unique UUID v4 for replay attack prevention
+//! - `keyid`: JWK thumbprint (RFC 7638) for public key identification
+//! - `alg`: Signature algorithm (ed25519)
+//! - `tag`: Interaction type (`agent-browser-auth` or `agent-payer-auth`)
+//!
 //! # Examples
 //!
 //! ## Basic Signature Generation
 //!
 //! ```rust
 //! use ed25519_dalek::SigningKey;
-//! use tap_mcp_bridge::tap::TapSigner;
+//! use tap_mcp_bridge::tap::{InteractionType, TapSigner};
 //!
 //! # fn example() -> tap_mcp_bridge::error::Result<()> {
 //! let signing_key = SigningKey::from_bytes(&[0u8; 32]);
 //! let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
 //!
-//! let signature = signer.sign_request("POST", "merchant.com", "/checkout", b"request body")?;
+//! // Generate signature for checkout operation
+//! let signature = signer.sign_request(
+//!     "POST",
+//!     "merchant.com",
+//!     "/checkout",
+//!     b"request body",
+//!     InteractionType::Checkout,
+//! )?;
 //!
 //! println!("Signature: {}", signature.signature);
 //! println!("Signature-Input: {}", signature.signature_input);
+//! println!("Nonce: {}", signature.nonce);
 //! # Ok(())
 //! # }
 //! ```
@@ -59,9 +78,22 @@
 //! # Security Considerations
 //!
 //! - **Key Management**: Protect Ed25519 private keys (use HSM in production)
-//! - **Timestamp Validation**: Signatures include creation timestamp to prevent replay
+//! - **Replay Attack Prevention**: Each signature includes unique nonce (UUID v4)
+//! - **Timestamp Validation**: Signatures expire after 8 minutes (TAP requirement)
+//! - **Nonce Tracking**: Merchants must reject duplicate nonces within 8-minute window
 //! - **HTTPS Only**: TAP signatures MUST be sent over HTTPS
 //! - **No Key Reuse**: Each agent should have unique keys per merchant (recommended)
+//!
+//! # TAP Compliance
+//!
+//! This implementation satisfies the following TAP specification requirements:
+//! - ✅ RFC 9421 HTTP Message Signatures with Ed25519
+//! - ✅ Interaction type tags (agent-browser-auth, agent-payer-auth)
+//! - ✅ Nonce generation for replay protection
+//! - ✅ Timestamp expiration (8-minute maximum window)
+//! - ✅ JWK Thumbprint key identifiers (RFC 7638)
+//! - ⏳ Agentic Consumer Recognition Object (planned Phase 3)
+//! - ⏳ Agentic Payment Container (planned Phase 3)
 
 pub mod signer;
 

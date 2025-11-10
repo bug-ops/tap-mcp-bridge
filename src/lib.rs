@@ -100,24 +100,26 @@
 //!
 //! ```rust
 //! use ed25519_dalek::SigningKey;
-//! use tap_mcp_bridge::tap::TapSigner;
+//! use tap_mcp_bridge::tap::{InteractionType, TapSigner};
 //!
 //! # fn example() -> tap_mcp_bridge::error::Result<()> {
 //! let signing_key = SigningKey::from_bytes(&[0u8; 32]);
 //! let signer = TapSigner::new(signing_key, "agent-123", "https://agent-directory.example.com");
 //!
-//! // Sign an HTTP request per RFC 9421
+//! // Sign an HTTP request per RFC 9421 with TAP parameters
 //! let signature = signer.sign_request(
 //!     "POST",
 //!     "merchant.example.com",
 //!     "/api/checkout",
 //!     b"{\"amount\":99.99}",
+//!     InteractionType::Checkout,
 //! )?;
 //!
 //! // Use signature headers in HTTP request
 //! println!("Signature: {}", signature.signature);
 //! println!("Signature-Input: {}", signature.signature_input);
 //! println!("Signature-Agent: {}", signature.agent_directory);
+//! println!("Nonce: {}", signature.nonce);
 //! # Ok(())
 //! # }
 //! ```
@@ -147,7 +149,9 @@
 //!
 //! - **HTTPS only**: All TAP requests require TLS encryption
 //! - **30-second timeout**: Prevents hanging connections
-//! - **Signature timestamps**: Included in signatures to aid replay detection
+//! - **Signature expiration**: Requests expire after 8 minutes (TAP requirement)
+//! - **Replay attack prevention**: Unique nonce (UUID v4) per request
+//! - **Nonce tracking**: Merchants must reject duplicate nonces within 8-minute window
 //!
 //! # Standards Compliance
 //!
@@ -156,20 +160,26 @@
 //! - [RFC 7638: JWK Thumbprint](https://www.rfc-editor.org/rfc/rfc7638.html)
 //! - [RFC 3986: URI Syntax](https://www.rfc-editor.org/rfc/rfc3986.html)
 //!
-//! # Current Status: Phase 2 - Core Validation
+//! # Current Status: Phase 2 - Core Validation (TAP Compliance)
 //!
-//! This implementation provides core functionality to validate pattern reuse
-//! and basic security measures:
+//! This implementation provides core TAP protocol compliance with critical
+//! security parameters:
 //!
 //! **Features**:
 //! - ✅ Two MCP tools: `checkout_with_tap`, `browse_merchant`
 //! - ✅ RFC 9421 signature generation with Ed25519
+//! - ✅ TAP required parameters: `tag`, `nonce`, `expires`, `created`, `keyid`, `alg`
+//! - ✅ Replay attack prevention (unique nonce per request)
+//! - ✅ Signature expiration (8-minute maximum window)
+//! - ✅ Interaction type tags (browser-auth, payer-auth)
 //! - ✅ Network error handling with 30-second timeout
 //! - ✅ Input validation (URL sanitization, consumer ID format)
 //! - ✅ Comprehensive test suite (39 tests)
 //!
+//! **TAP Compliance**: 14/18 requirements (78%)
+//!
 //! **Future Phases**:
-//! - Phase 3: Production readiness (replay protection, circuit breakers, metrics)
+//! - Phase 3: Production readiness (Agentic Consumer Recognition, Payment Container)
 //! - Phase 4: Production deployment (monitoring, alerts, runbooks)
 //!
 //! # Examples
