@@ -154,8 +154,22 @@ impl TapSigner {
         })
     }
 
-    /// Computes Content-Digest header value.
-    fn compute_content_digest(body: &[u8]) -> String {
+    /// Computes Content-Digest header value per RFC 9530.
+    ///
+    /// Generates a SHA-256 digest of the request body in the format required
+    /// by the Content-Digest HTTP header field.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tap_mcp_bridge::tap::TapSigner;
+    ///
+    /// let digest = TapSigner::compute_content_digest(b"test body");
+    /// assert!(digest.starts_with("sha-256=:"));
+    /// assert!(digest.ends_with(':'));
+    /// ```
+    #[must_use]
+    pub fn compute_content_digest(body: &[u8]) -> String {
         let hash = Sha256::digest(body);
         let hash_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, hash);
         format!("sha-256=:{hash_b64}:")

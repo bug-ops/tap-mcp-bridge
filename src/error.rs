@@ -30,6 +30,10 @@ use thiserror::Error;
 ///
 /// This is a convenience type that uses [`BridgeError`] as the error type.
 /// All fallible functions in this crate return this type.
+///
+/// Results should be handled by the caller - either checked for errors,
+/// propagated with `?`, or explicitly acknowledged with `.unwrap()` or
+/// `.expect()` in cases where failure is impossible.
 pub type Result<T> = std::result::Result<T, BridgeError>;
 
 /// Errors that can occur in the TAP-MCP bridge.
@@ -44,6 +48,10 @@ pub type Result<T> = std::result::Result<T, BridgeError>;
 /// - **Cryptographic errors** ([`SignatureError`](Self::SignatureError),
 ///   [`CryptoError`](Self::CryptoError)): Check key configuration
 /// - **Protocol errors** ([`MerchantError`](Self::MerchantError)): Contact merchant support
+///
+/// This type implements `#[must_use]` to ensure errors are not silently ignored.
+/// Always handle errors by checking, propagating, or explicitly panicking.
+#[must_use = "errors should be handled, propagated, or explicitly panicked"]
 #[derive(Debug, Error)]
 pub enum BridgeError {
     /// TAP signature generation failed.
@@ -142,6 +150,36 @@ pub enum BridgeError {
     /// ```
     #[error("Invalid merchant URL: {0}")]
     InvalidMerchantUrl(String),
+
+    /// Invalid consumer ID.
+    ///
+    /// This error occurs when input validation rejects a consumer ID.
+    /// Consumer IDs must meet these requirements:
+    /// - Not empty
+    /// - Maximum 64 characters
+    /// - Only alphanumeric characters, hyphens, and underscores
+    ///
+    /// # Recovery
+    ///
+    /// Ensure the consumer ID:
+    /// - Contains only letters (a-z, A-Z), numbers (0-9), hyphens (-), and underscores (_)
+    /// - Has at least 1 character
+    /// - Has no more than 64 characters
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tap_mcp_bridge::error::BridgeError;
+    ///
+    /// // These consumer IDs will be rejected:
+    /// let err = BridgeError::InvalidConsumerId("consumer@example.com".to_string());
+    /// assert!(err.to_string().contains("Invalid consumer ID"));
+    ///
+    /// let err = BridgeError::InvalidConsumerId("".to_string());
+    /// assert!(err.to_string().contains("Invalid consumer ID"));
+    /// ```
+    #[error("Invalid consumer ID: {0}")]
+    InvalidConsumerId(String),
 }
 
 #[cfg(test)]
@@ -158,5 +196,17 @@ mod tests {
     fn test_merchant_error() {
         let error = BridgeError::MerchantError("invalid response".into());
         assert!(error.to_string().contains("Invalid merchant response"));
+    }
+
+    #[test]
+    fn test_invalid_consumer_id_error() {
+        let error = BridgeError::InvalidConsumerId("invalid@id".to_owned());
+        assert_eq!(error.to_string(), "Invalid consumer ID: invalid@id");
+    }
+
+    #[test]
+    fn test_invalid_merchant_url_error() {
+        let error = BridgeError::InvalidMerchantUrl("http://example.com".to_owned());
+        assert_eq!(error.to_string(), "Invalid merchant URL: http://example.com");
     }
 }

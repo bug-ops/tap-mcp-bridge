@@ -11,18 +11,31 @@ use crate::{
     tap::{InteractionType, TapSigner},
 };
 
+/// Timeout for HTTP requests to merchants in seconds.
+///
+/// This timeout applies to the entire request-response cycle, including
+/// connection establishment, TLS handshake, request transmission, and
+/// response reception.
+///
+/// The 30-second timeout balances responsiveness with merchant processing time:
+/// - Long enough for merchants to process TAP signatures and authorize payments
+/// - Short enough to provide timely feedback to AI agents
+///
+/// This can be adjusted for testing with slower networks or merchants.
+const REQUEST_TIMEOUT_SECS: u64 = 30;
+
 /// Shared HTTP client for all TAP requests.
 ///
 /// This static client is initialized once and reused across all requests,
 /// providing connection pooling and reducing per-request overhead.
 ///
 /// The client is configured with:
-/// - 30-second timeout for all requests
+/// - 30-second timeout for all requests (see [`REQUEST_TIMEOUT_SECS`])
 /// - Connection pooling (100 connections per host)
 /// - HTTP/2 support with connection reuse
 static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     Client::builder()
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
         .pool_max_idle_per_host(100)
         .http2_prior_knowledge()
         .build()
@@ -103,7 +116,9 @@ pub async fn checkout_with_tap(
     info!(
         merchant_url = %params.merchant_url,
         consumer_id = %params.consumer_id,
-        "Executing TAP checkout"
+        method = "POST",
+        interaction_type = "checkout",
+        "executing TAP checkout"
     );
 
     let path = format!("/checkout?consumer_id={}&intent={}", params.consumer_id, params.intent);
@@ -118,7 +133,12 @@ pub async fn checkout_with_tap(
     )
     .await?;
 
-    info!("TAP checkout completed");
+    info!(
+        merchant_url = %params.merchant_url,
+        consumer_id = %params.consumer_id,
+        status = "completed",
+        "TAP checkout completed"
+    );
 
     Ok(CheckoutResult {
         status: "completed".to_owned(),
@@ -158,7 +178,9 @@ pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result
     info!(
         merchant_url = %params.merchant_url,
         consumer_id = %params.consumer_id,
-        "Browsing merchant catalog"
+        method = "GET",
+        interaction_type = "browse",
+        "browsing merchant catalog"
     );
 
     let path = format!("/catalog?consumer_id={}", params.consumer_id);
@@ -173,7 +195,12 @@ pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result
     )
     .await?;
 
-    info!("Browse catalog completed");
+    info!(
+        merchant_url = %params.merchant_url,
+        consumer_id = %params.consumer_id,
+        status = "completed",
+        "browse catalog completed"
+    );
 
     Ok(BrowseResult {
         status: "completed".to_owned(),
@@ -218,7 +245,7 @@ async fn execute_tap_request(
         .header("Signature", &signature.signature)
         .header("Signature-Input", &signature.signature_input)
         .header("Signature-Agent", signature.agent_directory.as_ref())
-        .header("Content-Digest", compute_content_digest(body))
+        .header("Content-Digest", TapSigner::compute_content_digest(body))
         .send()
         .await?;
 
@@ -235,17 +262,17 @@ async fn execute_tap_request(
 /// Validates consumer ID format.
 fn validate_consumer_id(consumer_id: &str) -> Result<()> {
     if consumer_id.is_empty() {
-        return Err(BridgeError::InvalidMerchantUrl("consumer_id cannot be empty".into()));
+        return Err(BridgeError::InvalidConsumerId("consumer_id cannot be empty".into()));
     }
 
     if consumer_id.len() > 64 {
-        return Err(BridgeError::InvalidMerchantUrl(
+        return Err(BridgeError::InvalidConsumerId(
             "consumer_id must be 64 characters or less".into(),
         ));
     }
 
     if !consumer_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-        return Err(BridgeError::InvalidMerchantUrl(
+        return Err(BridgeError::InvalidConsumerId(
             "consumer_id must contain only alphanumeric characters, hyphens, and underscores"
                 .into(),
         ));
@@ -270,14 +297,6 @@ fn parse_merchant_url(url_str: &str) -> Result<url::Url> {
     }
 
     Ok(url)
-}
-
-/// Computes Content-Digest header value.
-fn compute_content_digest(body: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    let hash = Sha256::digest(body);
-    let hash_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, hash);
-    format!("sha-256=:{hash_b64}:")
 }
 
 #[cfg(test)]
@@ -364,7 +383,7 @@ mod tests {
 
     #[test]
     fn test_compute_content_digest_empty() {
-        let digest = compute_content_digest(b"");
+        let digest = TapSigner::compute_content_digest(b"");
         assert!(digest.starts_with("sha-256=:"));
         assert!(digest.ends_with(':'));
         // SHA-256 of empty string
@@ -375,7 +394,7 @@ mod tests {
     fn test_compute_content_digest_known_value() {
         use sha2::{Digest, Sha256};
 
-        let digest = compute_content_digest(b"test body");
+        let digest = TapSigner::compute_content_digest(b"test body");
         // Verify against known SHA-256 hash
         let hash = Sha256::digest(b"test body");
         let hash_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, hash);

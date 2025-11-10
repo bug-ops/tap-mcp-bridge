@@ -6,6 +6,9 @@
 # Cargo lock for libraries (uncomment for applications)
 # Cargo.lock
 
+# sccache cache directory
+.sccache/
+
 # IDE and editor files
 .vscode/
 .idea/

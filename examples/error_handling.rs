@@ -156,6 +156,13 @@ fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, Br
             eprintln!("   → Retry: After correcting the URL");
         }
 
+        Err(BridgeError::InvalidConsumerId(msg)) => {
+            eprintln!("   ✗ Invalid consumer ID: {}", msg);
+            eprintln!("   → Fix: Use only alphanumeric, hyphen, and underscore characters");
+            eprintln!("   → Fix: Ensure ID is 1-64 characters");
+            eprintln!("   → Retry: After correcting the consumer ID");
+        }
+
         // Network errors - retry with backoff
         Err(BridgeError::HttpError(e)) => {
             eprintln!("   ✗ Network error: {}", e);
