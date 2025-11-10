@@ -5,7 +5,7 @@
 use ed25519_dalek::SigningKey;
 use tap_mcp_bridge::{
     mcp::{CheckoutParams, checkout_with_tap},
-    tap::TapSigner,
+    tap::{InteractionType, TapSigner},
 };
 
 #[test]
@@ -14,7 +14,7 @@ fn test_signature_generation_end_to_end() {
     let signer = TapSigner::new(signing_key, "test-agent", "https://agent.example.com");
 
     let signature = signer
-        .sign_request("POST", "merchant.com", "/checkout", b"test body")
+        .sign_request("POST", "merchant.com", "/checkout", b"test body", InteractionType::Checkout)
         .expect("signature generation should succeed");
 
     assert!(

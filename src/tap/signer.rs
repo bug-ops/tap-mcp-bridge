@@ -4,8 +4,29 @@ use std::time::SystemTime;
 
 use ed25519_dalek::{Signer, SigningKey};
 use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
 use crate::error::{BridgeError, Result};
+
+/// TAP interaction type determining the signature tag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InteractionType {
+    /// Browsing interaction (catalog, product details).
+    Browse,
+    /// Payment interaction (checkout, payment processing).
+    Checkout,
+}
+
+impl InteractionType {
+    /// Returns the TAP tag value for this interaction type.
+    #[must_use]
+    pub const fn tag(&self) -> &'static str {
+        match self {
+            Self::Browse => "agent-browser-auth",
+            Self::Checkout => "agent-payer-auth",
+        }
+    }
+}
 
 /// TAP signature for HTTP requests.
 #[derive(Debug, Clone)]
@@ -16,6 +37,8 @@ pub struct TapSignature {
     pub signature_input: String,
     /// Agent directory URL.
     pub agent_directory: String,
+    /// Nonce used in this signature (for replay protection).
+    pub nonce: String,
 }
 
 /// Generates TAP signatures for HTTP requests.
@@ -50,7 +73,8 @@ impl TapSigner {
 
     /// Signs an HTTP request with TAP signature.
     ///
-    /// Generates RFC 9421 HTTP Message Signatures with Ed25519.
+    /// Generates RFC 9421 HTTP Message Signatures with Ed25519, including
+    /// required TAP parameters: `tag`, `nonce`, `created`, and `expires`.
     ///
     /// # Errors
     ///
@@ -59,13 +83,19 @@ impl TapSigner {
     /// # Examples
     ///
     /// ```
-    /// # use tap_mcp_bridge::tap::TapSigner;
+    /// # use tap_mcp_bridge::tap::{TapSigner, InteractionType};
     /// # use ed25519_dalek::SigningKey;
     /// # fn example() -> tap_mcp_bridge::error::Result<()> {
     /// let signing_key = SigningKey::from_bytes(&[0u8; 32]);
     /// let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
     ///
-    /// let signature = signer.sign_request("POST", "merchant.com", "/checkout", b"request body")?;
+    /// let signature = signer.sign_request(
+    ///     "POST",
+    ///     "merchant.com",
+    ///     "/checkout",
+    ///     b"request body",
+    ///     InteractionType::Checkout,
+    /// )?;
     /// # Ok(())
     /// # }
     /// ```
@@ -75,6 +105,7 @@ impl TapSigner {
         authority: &str,
         path: &str,
         body: &[u8],
+        interaction_type: InteractionType,
     ) -> Result<TapSignature> {
         let content_digest = Self::compute_content_digest(body);
         let created = SystemTime::now()
@@ -82,9 +113,26 @@ impl TapSigner {
             .map_err(|e| BridgeError::CryptoError(format!("system time error: {e}")))?
             .as_secs();
 
+        // TAP requirement: expires must be within 8 minutes (480 seconds) of created
+        let expires = created + 480;
+
+        // Generate unique nonce for replay protection (TAP requirement)
+        let nonce = Uuid::new_v4().to_string();
+
         let keyid = self.compute_keyid();
-        let signature_base =
-            self.build_signature_base(method, authority, path, &content_digest, created);
+        let tag = interaction_type.tag();
+
+        let signature_base = Self::build_signature_base(
+            method,
+            authority,
+            path,
+            &content_digest,
+            created,
+            expires,
+            &nonce,
+            &keyid,
+            tag,
+        );
 
         let signature = self.signing_key.sign(signature_base.as_bytes());
         let signature_b64 = base64::Engine::encode(
@@ -94,13 +142,15 @@ impl TapSigner {
 
         let signature_input = format!(
             "sig1=(\"@method\" \"@authority\" \"@path\" \
-             \"content-digest\");created={created};keyid=\"{keyid}\";alg=\"ed25519\""
+             \"content-digest\");created={created};expires={expires};keyid=\"{keyid}\";alg=\"\
+             ed25519\";nonce=\"{nonce}\";tag=\"{tag}\""
         );
 
         Ok(TapSignature {
             signature: format!("sig1=:{signature_b64}:"),
             signature_input,
             agent_directory: self.agent_directory.clone(),
+            nonce,
         })
     }
 
@@ -125,21 +175,28 @@ impl TapSigner {
         base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, hash)
     }
 
-    /// Builds signature base string per RFC 9421.
+    /// Builds signature base string per RFC 9421 with TAP extensions.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "RFC 9421 requires all parameters"
+    )]
     fn build_signature_base(
-        &self,
         method: &str,
         authority: &str,
         path: &str,
         content_digest: &str,
         created: u64,
+        expires: u64,
+        nonce: &str,
+        keyid: &str,
+        tag: &str,
     ) -> String {
         format!(
             "\"@method\": {method}\n\"@authority\": {authority}\n\"@path\": \
              {path}\n\"content-digest\": {content_digest}\n\"@signature-params\": (\"@method\" \
              \"@authority\" \"@path\" \
-             \"content-digest\");created={created};keyid=\"{}\";alg=\"ed25519\"",
-            self.compute_keyid()
+             \"content-digest\");created={created};expires={expires};keyid=\"{keyid}\";alg=\"\
+             ed25519\";nonce=\"{nonce}\";tag=\"{tag}\""
         )
     }
 }
@@ -225,22 +282,30 @@ mod tests {
     fn test_build_signature_base_format() {
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
+        let keyid = signer.compute_keyid();
 
-        let base = signer.build_signature_base(
+        let base = TapSigner::build_signature_base(
             "POST",
             "merchant.com",
             "/checkout",
             "sha-256=:xyz123=:",
             1_234_567_890,
+            1_234_568_370, // expires = created + 480
+            "test-nonce-uuid",
+            &keyid,
+            "agent-payer-auth",
         );
 
-        // Verify RFC 9421 signature base string format
+        // Verify RFC 9421 signature base string format with TAP parameters
         assert!(base.contains("\"@method\": POST"));
         assert!(base.contains("\"@authority\": merchant.com"));
         assert!(base.contains("\"@path\": /checkout"));
         assert!(base.contains("\"content-digest\": sha-256=:xyz123=:"));
         assert!(base.contains("\"@signature-params\":"));
         assert!(base.contains("created=1234567890"));
+        assert!(base.contains("expires=1234568370"));
+        assert!(base.contains("nonce=\"test-nonce-uuid\""));
+        assert!(base.contains("tag=\"agent-payer-auth\""));
         assert!(base.contains("alg=\"ed25519\""));
     }
 
@@ -248,13 +313,18 @@ mod tests {
     fn test_build_signature_base_component_order() {
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
+        let keyid = signer.compute_keyid();
 
-        let base = signer.build_signature_base(
+        let base = TapSigner::build_signature_base(
             "POST",
             "merchant.com",
             "/checkout",
             "sha-256=:xyz=:",
             1_234_567_890,
+            1_234_568_370,
+            "test-nonce",
+            &keyid,
+            "agent-payer-auth",
         );
 
         // Verify component order matches RFC 9421 requirements
@@ -273,12 +343,21 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
 
-        let result = signer.sign_request("POST", "merchant.com", "/checkout", b"test body");
+        let result = signer.sign_request(
+            "POST",
+            "merchant.com",
+            "/checkout",
+            b"test body",
+            InteractionType::Checkout,
+        );
 
         assert!(result.is_ok());
         let signature = result.unwrap();
         assert!(signature.signature.starts_with("sig1=:"));
         assert!(signature.signature_input.contains("created="));
+        assert!(signature.signature_input.contains("expires="));
+        assert!(signature.signature_input.contains("nonce="));
+        assert!(signature.signature_input.contains("tag=\"agent-payer-auth\""));
         assert_eq!(signature.agent_directory, "https://test.com");
     }
 
@@ -287,7 +366,13 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
 
-        let result = signer.sign_request("POST", "merchant.com", "/checkout", b"test body");
+        let result = signer.sign_request(
+            "POST",
+            "merchant.com",
+            "/checkout",
+            b"test body",
+            InteractionType::Checkout,
+        );
         assert!(result.is_ok());
 
         let sig = result.unwrap();
@@ -318,7 +403,7 @@ mod tests {
         let path = "/checkout";
         let body = b"test body";
 
-        let result = signer.sign_request(method, authority, path, body);
+        let result = signer.sign_request(method, authority, path, body, InteractionType::Checkout);
         assert!(result.is_ok());
 
         let tap_sig = result.unwrap();
@@ -331,7 +416,7 @@ mod tests {
         // Reconstruct signature base string
         let content_digest = TapSigner::compute_content_digest(body);
 
-        // Extract timestamp from signature_input
+        // Extract parameters from signature_input
         let created_str = tap_sig
             .signature_input
             .split("created=")
@@ -342,8 +427,30 @@ mod tests {
             .unwrap();
         let created: u64 = created_str.parse().unwrap();
 
-        let signature_base =
-            signer.build_signature_base(method, authority, path, &content_digest, created);
+        let expires_str = tap_sig
+            .signature_input
+            .split("expires=")
+            .nth(1)
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap();
+        let expires: u64 = expires_str.parse().unwrap();
+
+        let nonce = &tap_sig.nonce;
+        let keyid = signer.compute_keyid();
+
+        let signature_base = TapSigner::build_signature_base(
+            method,
+            authority,
+            path,
+            &content_digest,
+            created,
+            expires,
+            nonce,
+            &keyid,
+            "agent-payer-auth",
+        );
 
         // Verify signature
         let signature =
@@ -360,8 +467,24 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
 
-        let sig1 = signer.sign_request("POST", "merchant.com", "/checkout", b"test body").unwrap();
-        let sig2 = signer.sign_request("POST", "merchant.com", "/checkout", b"test body").unwrap();
+        let sig1 = signer
+            .sign_request(
+                "POST",
+                "merchant.com",
+                "/checkout",
+                b"test body",
+                InteractionType::Checkout,
+            )
+            .unwrap();
+        let sig2 = signer
+            .sign_request(
+                "POST",
+                "merchant.com",
+                "/checkout",
+                b"test body",
+                InteractionType::Checkout,
+            )
+            .unwrap();
 
         // Keyid should be the same across all requests
         let keyid = signer.compute_keyid();
@@ -371,6 +494,9 @@ mod tests {
         // Agent directory should be consistent
         assert_eq!(sig1.agent_directory, "https://test.com");
         assert_eq!(sig2.agent_directory, "https://test.com");
+
+        // Nonces should be different (replay protection)
+        assert_ne!(sig1.nonce, sig2.nonce);
     }
 
     #[test]
@@ -378,20 +504,29 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
 
-        let result = signer.sign_request("POST", "merchant.com", "/checkout", b"test body");
+        let result = signer.sign_request(
+            "POST",
+            "merchant.com",
+            "/checkout",
+            b"test body",
+            InteractionType::Checkout,
+        );
         assert!(result.is_ok());
 
         let sig = result.unwrap();
 
-        // Verify signature_input format per RFC 9421
+        // Verify signature_input format per RFC 9421 with TAP extensions
         assert!(sig.signature_input.starts_with("sig1=("));
         assert!(sig.signature_input.contains("\"@method\""));
         assert!(sig.signature_input.contains("\"@authority\""));
         assert!(sig.signature_input.contains("\"@path\""));
         assert!(sig.signature_input.contains("\"content-digest\""));
         assert!(sig.signature_input.contains(");created="));
+        assert!(sig.signature_input.contains(";expires="));
         assert!(sig.signature_input.contains(";keyid=\""));
         assert!(sig.signature_input.contains(";alg=\"ed25519\""));
+        assert!(sig.signature_input.contains(";nonce=\""));
+        assert!(sig.signature_input.contains(";tag=\"agent-payer-auth\""));
     }
 
     #[test]
@@ -399,14 +534,24 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
 
-        let sig1 = signer.sign_request("POST", "merchant.com", "/checkout", b"body1").unwrap();
-        let sig2 = signer.sign_request("POST", "merchant.com", "/checkout", b"body2").unwrap();
-        let sig3 = signer.sign_request("GET", "merchant.com", "/checkout", b"body1").unwrap();
+        let sig1 = signer
+            .sign_request("POST", "merchant.com", "/checkout", b"body1", InteractionType::Checkout)
+            .unwrap();
+        let sig2 = signer
+            .sign_request("POST", "merchant.com", "/checkout", b"body2", InteractionType::Checkout)
+            .unwrap();
+        let sig3 = signer
+            .sign_request("GET", "merchant.com", "/checkout", b"body1", InteractionType::Browse)
+            .unwrap();
 
         // Different bodies should produce different signatures
         assert_ne!(sig1.signature, sig2.signature);
 
         // Different methods should produce different signatures
         assert_ne!(sig1.signature, sig3.signature);
+
+        // Different interaction types should produce different tags
+        assert!(sig1.signature_input.contains("agent-payer-auth"));
+        assert!(sig3.signature_input.contains("agent-browser-auth"));
     }
 }

@@ -65,4 +65,4 @@
 
 pub mod signer;
 
-pub use signer::TapSigner;
+pub use signer::{InteractionType, TapSigner};

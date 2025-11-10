@@ -19,7 +19,7 @@
 )]
 
 use ed25519_dalek::SigningKey;
-use tap_mcp_bridge::tap::TapSigner;
+use tap_mcp_bridge::tap::{InteractionType, TapSigner};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("TAP-MCP Bridge: Signature Generation Example\n");
@@ -39,8 +39,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n3. Generating RFC 9421 signature for POST request...");
     let request_body = br#"{"amount":99.99,"currency":"USD"}"#;
 
-    let signature =
-        signer.sign_request("POST", "merchant.example.com", "/api/checkout", request_body)?;
+    let signature = signer.sign_request(
+        "POST",
+        "merchant.example.com",
+        "/api/checkout",
+        request_body,
+        InteractionType::Checkout,
+    )?;
 
     println!("   ✓ Signature generated successfully\n");
 
@@ -56,7 +61,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 4: Generate signature for a GET request
     println!("\n4. Generating signature for GET request (browsing)...");
-    let signature = signer.sign_request("GET", "merchant.example.com", "/catalog", b"")?;
+    let signature = signer.sign_request(
+        "GET",
+        "merchant.example.com",
+        "/catalog",
+        b"",
+        InteractionType::Browse,
+    )?;
 
     println!("   ✓ Signature generated\n");
     println!("   Signature format: sig1=:<base64-encoded-signature>:");
@@ -84,7 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     for (authority, path) in merchants {
-        let sig = signer.sign_request("POST", authority, path, b"{}")?;
+        let sig = signer.sign_request("POST", authority, path, b"{}", InteractionType::Checkout)?;
         println!("   ✓ Signed request to {}{}", authority, path);
         println!("     Signature preview: {}...", &sig.signature[..30]);
     }

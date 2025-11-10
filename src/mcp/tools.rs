@@ -8,7 +8,7 @@ use tracing::info;
 
 use crate::{
     error::{BridgeError, Result},
-    tap::TapSigner,
+    tap::{InteractionType, TapSigner},
 };
 
 /// Parameters for checkout operation.
@@ -94,7 +94,13 @@ pub async fn checkout_with_tap(
     let path = format!("/checkout?consumer_id={}&intent={}", params.consumer_id, params.intent);
 
     let body = b"";
-    let signature = signer.sign_request("POST", url.host_str().unwrap_or(""), &path, body)?;
+    let signature = signer.sign_request(
+        "POST",
+        url.host_str().unwrap_or(""),
+        &path,
+        body,
+        InteractionType::Checkout,
+    )?;
 
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
@@ -166,7 +172,13 @@ pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result
     let path = format!("/catalog?consumer_id={}", params.consumer_id);
 
     let body = b"";
-    let signature = signer.sign_request("GET", url.host_str().unwrap_or(""), &path, body)?;
+    let signature = signer.sign_request(
+        "GET",
+        url.host_str().unwrap_or(""),
+        &path,
+        body,
+        InteractionType::Browse,
+    )?;
 
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
