@@ -34,3 +34,6 @@
 
 # OS files
 Thumbs.db
+
+# Local development files
+.local/
