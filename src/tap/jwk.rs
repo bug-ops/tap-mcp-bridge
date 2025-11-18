@@ -87,7 +87,7 @@ use sha2::{Digest, Sha256};
 /// # Examples
 ///
 /// ```
-/// use ed25519_dalek::SigningKey;
+/// # use ed25519_dalek::SigningKey;
 /// use tap_mcp_bridge::tap::jwk::Jwk;
 ///
 /// let signing_key = SigningKey::from_bytes(&[0u8; 32]);

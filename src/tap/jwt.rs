@@ -53,8 +53,9 @@
 
 use std::time::SystemTime;
 
-use ed25519_dalek::{Signer, SigningKey};
+use ed25519_dalek::SigningKey;
 use serde::{Deserialize, Serialize};
+use signature::Signer;
 
 use crate::error::{BridgeError, Result};
 
