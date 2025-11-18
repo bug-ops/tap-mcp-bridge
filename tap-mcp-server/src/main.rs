@@ -150,7 +150,6 @@ impl Config {
     }
 }
 
-
 /// Creates TAP signer from configuration.
 ///
 /// Parses the hex-encoded signing key and creates a `TapSigner` instance.
@@ -333,7 +332,10 @@ impl TapMcpServer {
     /// Verify agent identity and report health status
     #[tool(description = "Verify agent identity and check server health status")]
     #[instrument(skip(self, _params), fields(agent_id = %self.agent_id))]
-    async fn verify_agent_identity(&self, _params: Parameters<()>) -> Result<CallToolResult, McpError> {
+    async fn verify_agent_identity(
+        &self,
+        _params: Parameters<()>,
+    ) -> Result<CallToolResult, McpError> {
         info!(tool = "verify_agent_identity", "processing health check");
 
         let uptime_secs = self.start_time.elapsed().as_secs();
@@ -352,7 +354,8 @@ impl TapMcpServer {
                 "jwks_generation",
                 "JWKS generated successfully",
             )),
-            Err(e) => checks.push(HealthCheck::fail("jwks_generation", format!("JWKS generation failed: {e}"))),
+            Err(e) => checks
+                .push(HealthCheck::fail("jwks_generation", format!("JWKS generation failed: {e}"))),
         }
 
         // Determine overall status
@@ -434,7 +437,10 @@ async fn main() -> Result<()> {
     // Create server with tools
     let server = TapMcpServer::new(signer, &config.agent_id);
 
-    info!("MCP server configured with tools: checkout_with_tap, browse_merchant, verify_agent_identity");
+    info!(
+        "MCP server configured with tools: checkout_with_tap, browse_merchant, \
+         verify_agent_identity"
+    );
     info!("MCP server started, listening on stdio");
     info!("Press Ctrl+C to shutdown");
 

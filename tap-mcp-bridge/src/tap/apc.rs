@@ -496,7 +496,7 @@ impl PaymentMethod {
 ///
 /// assert_eq!(card.last_four(), "1111");
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CardData {
     /// Card number (PAN).
     pub number: String,
@@ -508,6 +508,18 @@ pub struct CardData {
     pub cvv: String,
     /// Cardholder name as printed on card.
     pub cardholder_name: String,
+}
+
+impl std::fmt::Debug for CardData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CardData")
+            .field("number", &format_args!("****{}", self.last_four()))
+            .field("exp_month", &self.exp_month)
+            .field("exp_year", &self.exp_year)
+            .field("cvv", &"***")
+            .field("cardholder_name", &self.cardholder_name)
+            .finish()
+    }
 }
 
 impl CardData {
@@ -600,7 +612,7 @@ impl Drop for CardData {
 ///
 /// assert_eq!(account.last_four(), "7890");
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BankAccountData {
     /// Bank account number.
     pub account_number: String,
@@ -610,6 +622,17 @@ pub struct BankAccountData {
     pub account_type: String,
     /// Account holder name.
     pub account_holder_name: String,
+}
+
+impl std::fmt::Debug for BankAccountData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BankAccountData")
+            .field("account_number", &format_args!("****{}", self.last_four()))
+            .field("routing_number", &"*****")
+            .field("account_type", &self.account_type)
+            .field("account_holder_name", &self.account_holder_name)
+            .finish()
+    }
 }
 
 impl BankAccountData {
@@ -899,6 +922,94 @@ mwIDAQAB
         };
 
         assert_eq!(account.last_four(), "7890");
+    }
+
+    #[test]
+    fn test_card_data_debug_does_not_leak_sensitive_data() {
+        let card = CardData {
+            number: "4111111111111111".to_owned(),
+            exp_month: "12".to_owned(),
+            exp_year: "25".to_owned(),
+            cvv: "123".to_owned(),
+            cardholder_name: "John Doe".to_owned(),
+        };
+
+        let debug_output = format!("{:?}", card);
+
+        // PAN must not leak
+        assert!(
+            !debug_output.contains("4111111111111111"),
+            "PAN must not appear in Debug output"
+        );
+
+        // CVV must not leak
+        assert!(
+            !debug_output.contains("123"),
+            "CVV must not appear in Debug output"
+        );
+
+        // Should show masked PAN (last 4 digits)
+        assert!(
+            debug_output.contains("****1111"),
+            "Should show masked PAN with last 4 digits"
+        );
+
+        // Should show redacted CVV
+        assert!(debug_output.contains("***"), "Should show redacted CVV");
+
+        // Non-sensitive fields should be visible
+        assert!(debug_output.contains("12"), "Expiry month should be visible");
+        assert!(debug_output.contains("25"), "Expiry year should be visible");
+        assert!(
+            debug_output.contains("John Doe"),
+            "Cardholder name should be visible"
+        );
+    }
+
+    #[test]
+    fn test_bank_account_data_debug_does_not_leak_sensitive_data() {
+        let account = BankAccountData {
+            account_number: "1234567890".to_owned(),
+            routing_number: "021000021".to_owned(),
+            account_type: "checking".to_owned(),
+            account_holder_name: "Jane Doe".to_owned(),
+        };
+
+        let debug_output = format!("{:?}", account);
+
+        // Account number must not leak
+        assert!(
+            !debug_output.contains("1234567890"),
+            "Account number must not appear in Debug output"
+        );
+
+        // Routing number must not leak
+        assert!(
+            !debug_output.contains("021000021"),
+            "Routing number must not appear in Debug output"
+        );
+
+        // Should show masked account number (last 4 digits)
+        assert!(
+            debug_output.contains("****7890"),
+            "Should show masked account number with last 4 digits"
+        );
+
+        // Should show redacted routing number
+        assert!(
+            debug_output.contains("*****"),
+            "Should show redacted routing number"
+        );
+
+        // Non-sensitive fields should be visible
+        assert!(
+            debug_output.contains("checking"),
+            "Account type should be visible"
+        );
+        assert!(
+            debug_output.contains("Jane Doe"),
+            "Account holder name should be visible"
+        );
     }
 
     #[test]

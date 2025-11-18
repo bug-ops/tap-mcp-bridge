@@ -29,11 +29,7 @@ impl LogFormat {
     /// - `pretty` or unset => Pretty format
     #[must_use]
     pub fn from_env() -> Self {
-        match std::env::var("LOG_FORMAT")
-            .unwrap_or_default()
-            .to_lowercase()
-            .as_str()
-        {
+        match std::env::var("LOG_FORMAT").unwrap_or_default().to_lowercase().as_str() {
             "json" => Self::Json,
             _ => Self::Pretty,
         }
@@ -55,7 +51,7 @@ impl LogFormat {
 /// # Examples
 ///
 /// ```no_run
-/// use tap_mcp_server::observability::{init_observability, LogFormat};
+/// use tap_mcp_server::observability::{LogFormat, init_observability};
 ///
 /// // Development: pretty logs
 /// std::env::set_var("LOG_FORMAT", "pretty");
@@ -173,7 +169,11 @@ impl HealthCheck {
     /// Creates a failing health check with error message.
     #[must_use]
     pub fn fail<N: Into<String>, M: Into<String>>(name: N, message: M) -> Self {
-        Self { name: name.into(), status: HealthCheckStatus::Fail, message: Some(message.into()) }
+        Self {
+            name: name.into(),
+            status: HealthCheckStatus::Fail,
+            message: Some(message.into()),
+        }
     }
 
     #[cfg(test)]
@@ -183,7 +183,11 @@ impl HealthCheck {
 
     #[cfg(test)]
     fn warn(name: impl Into<String>, message: impl Into<String>) -> Self {
-        Self { name: name.into(), status: HealthCheckStatus::Warn, message: Some(message.into()) }
+        Self {
+            name: name.into(),
+            status: HealthCheckStatus::Warn,
+            message: Some(message.into()),
+        }
     }
 }
 
@@ -248,8 +252,9 @@ mod tests {
 
     #[test]
     fn test_log_format_from_env() {
-        // SAFETY: This test runs in isolation and only modifies test-specific environment variables.
-        // The LOG_FORMAT variable is only used by this test and doesn't affect other tests.
+        // SAFETY: This test runs in isolation and only modifies test-specific environment
+        // variables. The LOG_FORMAT variable is only used by this test and doesn't affect
+        // other tests.
         unsafe {
             // Unset environment variable defaults to Pretty
             std::env::remove_var("LOG_FORMAT");
@@ -312,10 +317,8 @@ mod tests {
 
     #[test]
     fn test_health_status_compute_with_warn() {
-        let checks = vec![
-            HealthCheck::pass("check1"),
-            HealthCheck::warn("check2", "Warning message"),
-        ];
+        let checks =
+            vec![HealthCheck::pass("check1"), HealthCheck::warn("check2", "Warning message")];
         assert_eq!(HealthReport::compute_status(&checks), HealthStatus::Degraded);
     }
 
