@@ -146,6 +146,22 @@ Container for encrypted payment credentials with agent signature.
 
 **Payment Data Encryption (JWE)**:
 
+```mermaid
+flowchart LR
+    Payment[Payment Method<br/>Card/Bank/Wallet] --> Serialize
+    Serialize[Serialize to JSON] --> Generate
+    Generate[Generate random<br/>Content Encryption Key] --> Encrypt
+    Encrypt[Encrypt content<br/>A256GCM] --> EncryptKey
+    EncryptKey[Encrypt CEK<br/>RSA-OAEP-256<br/>with merchant public key] --> Combine
+    Combine[Combine into JWE<br/>Compact Serialization] --> JWE
+    JWE[header.encrypted_key.iv.ciphertext.tag]
+
+    style Payment fill:#ffe1e1
+    style Encrypt fill:#e1f5ff
+    style EncryptKey fill:#fff4e1
+    style JWE fill:#e8f5e9
+```
+
 The `encryptedPaymentData` field contains RFC 7516 JWE with:
 - **Content Encryption**: A256GCM (AES-256-GCM)
 - **Key Encryption**: RSA-OAEP-256 with merchant's public key
@@ -172,6 +188,23 @@ header.encrypted_key.iv.ciphertext.tag
 ## Implementation Details
 
 ### Signature Generation Flow
+
+```mermaid
+flowchart TB
+    Start([Start: HTTP Request]) --> BuildBase
+    BuildBase[Build Signature Base String<br/>@method, @authority, @path, content-digest] --> AddParams
+    AddParams[Add Signature Parameters<br/>created, expires, nonce, keyid, alg, tag] --> Sign
+    Sign[Sign with Ed25519<br/>using agent's private key] --> Encode
+    Encode[Encode signature<br/>base64url] --> AddHeaders
+    AddHeaders[Add Headers to Request<br/>Signature-Input, Signature, Signature-Agent] --> Send
+    Send([Send Signed Request])
+
+    style BuildBase fill:#e1f5ff
+    style Sign fill:#ffe1e1
+    style AddHeaders fill:#e8f5e9
+```
+
+**Implementation**:
 
 ```rust
 // 1. Build signature base string
@@ -210,13 +243,33 @@ let thumbprint = base64url::encode(hash);
 
 ### Nonce Correlation
 
-TAP requires the same nonce across:
+TAP requires the same nonce across all components to bind them to a single request:
+
+```mermaid
+graph LR
+    Nonce[Nonce: UUID v4<br/>e.g., 550e8400-e29b-41d4-a716-446655440000]
+
+    Nonce --> Sig[HTTP Message Signature<br/>nonce parameter]
+    Nonce --> JWT[ID Token JWT<br/>nonce claim]
+    Nonce --> ACRO[ACRO<br/>nonce field]
+    Nonce --> APC[APC<br/>nonce field]
+
+    Sig --> Request[Complete TAP Request]
+    JWT --> Request
+    ACRO --> Request
+    APC --> Request
+
+    style Nonce fill:#ffe1e1
+    style Request fill:#e8f5e9
+```
+
+**Components using the same nonce**:
 1. HTTP Message Signature (`nonce` parameter)
 2. ID Token JWT (`nonce` claim)
 3. ACRO (`nonce` field)
 4. APC (`nonce` field)
 
-This binds all TAP components to a single request, preventing mix-and-match attacks.
+**Purpose**: This binds all TAP components to a single request, preventing mix-and-match attacks where an attacker could combine components from different requests.
 
 ## Security Considerations
 

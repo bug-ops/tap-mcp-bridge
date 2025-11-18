@@ -6,36 +6,27 @@ The Model Context Protocol (MCP) is Anthropic's specification for enabling AI ag
 
 ## MCP Architecture
 
-```
-┌──────────────────────┐
-│   AI Agent (Claude)  │
-│                      │
-└──────────┬───────────┘
-           │ MCP Protocol
-           │ (JSON-RPC 2.0)
-           │
-┌──────────▼───────────┐
-│   MCP Server         │
-│   (this bridge)      │
-│                      │
-│  ┌────────────────┐  │
-│  │  Tool Registry │  │
-│  │  - checkout    │  │
-│  │  - browse      │  │
-│  │  - verify      │  │
-│  └────────────────┘  │
-│                      │
-│  ┌────────────────┐  │
-│  │  TAP Client    │  │
-│  │  (signatures)  │  │
-│  └────────────────┘  │
-└──────────┬───────────┘
-           │ HTTPS + TAP Signatures
-           │
-┌──────────▼───────────┐
-│   TAP Merchant       │
-│   (e-commerce site)  │
-└──────────────────────┘
+```mermaid
+graph TB
+    Agent[AI Agent Claude]
+    Bridge[MCP Server tap-mcp-bridge]
+    Tools[Tool Registry]
+    TAPClient[TAP Client]
+    Merchant[TAP Merchant e-commerce]
+
+    Agent -->|"MCP Protocol<br/>(JSON-RPC 2.0)"| Bridge
+    Bridge --> Tools
+    Bridge --> TAPClient
+    Tools -.->|checkout| TAPClient
+    Tools -.->|browse| TAPClient
+    Tools -.->|verify| TAPClient
+    TAPClient -->|"HTTPS + TAP Signatures<br/>(RFC 9421)"| Merchant
+
+    style Agent fill:#e1f5ff
+    style Bridge fill:#fff4e1
+    style Tools fill:#f0f0f0
+    style TAPClient fill:#f0f0f0
+    style Merchant fill:#e8f5e9
 ```
 
 ## MCP Protocol Basics
@@ -45,6 +36,7 @@ The Model Context Protocol (MCP) is Anthropic's specification for enabling AI ag
 MCP uses JSON-RPC 2.0 for communication between agent and server:
 
 **Request**:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -62,6 +54,7 @@ MCP uses JSON-RPC 2.0 for communication between agent and server:
 ```
 
 **Response**:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -95,6 +88,7 @@ The bridge exposes three MCP tools for TAP operations:
 Execute a TAP-authenticated checkout transaction.
 
 **Tool Definition**:
+
 ```json
 {
   "name": "checkout_with_tap",
@@ -127,26 +121,57 @@ Execute a TAP-authenticated checkout transaction.
 **Implementation**: `src/mcp/tools.rs::checkout_with_tap()`
 
 **TAP Components Used**:
+
 - HTTP Message Signature with `tag="agent-payer-auth"`
 - ID Token (JWT) for consumer authentication
 - ACRO (Agentic Consumer Recognition Object) with contextual data
 - APC (Agentic Payment Container) with JWE-encrypted payment credentials
 
 **Request Flow**:
-1. Generate unique nonce (UUID v4)
-2. Create ID Token with consumer identity
-3. Build ACRO with consumer context (IP, device, location)
-4. Encrypt payment credentials with merchant's public key (JWE)
-5. Create APC with encrypted payment data
-6. Sign HTTP request with TAP signature
-7. Send POST request to merchant with ACRO and APC in body
-8. Return merchant response to agent
+
+```mermaid
+sequenceDiagram
+    participant Agent as AI Agent
+    participant Bridge as MCP Bridge
+    participant TAP as TAP Signer
+    participant Merchant as TAP Merchant
+
+    Agent->>Bridge: checkout_with_tap(merchant_url, consumer_id, intent, payment_method)
+
+    Bridge->>Bridge: Generate nonce (UUID v4)
+    Bridge->>TAP: generate_id_token(nonce, consumer_id, merchant_url)
+    TAP-->>Bridge: ID Token (JWT)
+
+    Bridge->>TAP: generate_acro(nonce, id_token, contextual_data)
+    TAP-->>Bridge: ACRO (signed)
+
+    Bridge->>Merchant: Fetch merchant public key (JWKS)
+    Merchant-->>Bridge: RSA public key
+
+    Bridge->>TAP: generate_apc(nonce, payment_method, merchant_key)
+    TAP->>TAP: Encrypt payment data (JWE)
+    TAP-->>Bridge: APC (encrypted + signed)
+
+    Bridge->>TAP: sign_request(POST, merchant_url, headers, body)
+    TAP-->>Bridge: RFC 9421 signature
+
+    Bridge->>Merchant: POST /checkout<br/>Headers: Signature, Signature-Input<br/>Body: {acro, apc}
+    Merchant->>Merchant: Verify signature
+    Merchant->>Merchant: Decrypt payment data
+    Merchant->>Merchant: Process transaction
+    Merchant-->>Bridge: {status: "success", transaction_id: "tx-789"}
+
+    Bridge-->>Agent: ToolResult {content: "Checkout completed"}
+
+    Note over Bridge,Merchant: All components use same nonce for correlation
+```
 
 ### 2. browse_merchant
 
 Browse merchant catalog with TAP authentication.
 
 **Tool Definition**:
+
 ```json
 {
   "name": "browse_merchant",
@@ -175,23 +200,48 @@ Browse merchant catalog with TAP authentication.
 **Implementation**: `src/mcp/tools.rs::browse_merchant()`
 
 **TAP Components Used**:
+
 - HTTP Message Signature with `tag="agent-browser-auth"`
 - ID Token (JWT) for consumer authentication
 - ACRO (Agentic Consumer Recognition Object) with contextual data
 
 **Request Flow**:
-1. Generate unique nonce (UUID v4)
-2. Create ID Token with consumer identity
-3. Build ACRO with consumer context
-4. Sign HTTP request with TAP signature
-5. Send GET request to merchant with ACRO in query parameters
-6. Return merchant catalog data to agent
+
+```mermaid
+sequenceDiagram
+    participant Agent as AI Agent
+    participant Bridge as MCP Bridge
+    participant TAP as TAP Signer
+    participant Merchant as TAP Merchant
+
+    Agent->>Bridge: browse_merchant(merchant_url, consumer_id, filters)
+
+    Bridge->>Bridge: Generate nonce (UUID v4)
+    Bridge->>TAP: generate_id_token(nonce, consumer_id, merchant_url)
+    TAP-->>Bridge: ID Token (JWT)
+
+    Bridge->>TAP: generate_acro(nonce, id_token, contextual_data)
+    TAP-->>Bridge: ACRO (signed)
+
+    Bridge->>TAP: sign_request(GET, merchant_url, headers, acro)
+    TAP-->>Bridge: RFC 9421 signature
+
+    Bridge->>Merchant: GET /catalog?acro=...&filters=...<br/>Headers: Signature, Signature-Input
+    Merchant->>Merchant: Verify signature
+    Merchant->>Merchant: Apply filters
+    Merchant-->>Bridge: {products: [...], total: 42}
+
+    Bridge-->>Agent: ToolResult {content: "Found 42 products"}
+
+    Note over Bridge,Merchant: No payment data - browsing only
+```
 
 ### 3. verify_agent_identity
 
 Verify agent's TAP identity and key configuration.
 
 **Tool Definition**:
+
 ```json
 {
   "name": "verify_agent_identity",
@@ -207,6 +257,7 @@ Verify agent's TAP identity and key configuration.
 **Implementation**: `src/mcp/tools.rs::verify_agent_identity()`
 
 **Verification Checks**:
+
 - ✅ Agent ID is set and valid
 - ✅ Signing key is loaded and functional
 - ✅ JWK Thumbprint (kid) is computed correctly
@@ -317,6 +368,7 @@ pub use rmcp::{Server, Transport};
 This allows developers to:
 
 1. **Embed in existing applications**:
+
 ```rust
 use tap_mcp_bridge::{
     mcp::{checkout_with_tap, CheckoutParams},
@@ -328,6 +380,7 @@ let result = checkout_with_tap(&signer, params).await?;
 ```
 
 2. **Create custom MCP servers**:
+
 ```rust
 use rmcp::{Server, stdio::StdioTransport};
 use tap_mcp_bridge::mcp::checkout_with_tap;
@@ -342,6 +395,7 @@ async fn main() {
 ```
 
 3. **Integrate with Claude Desktop**:
+
 ```json
 {
   "mcpServers": {
@@ -456,6 +510,7 @@ MCP integration is tested with:
 - **Error handling tests**: Invalid inputs, network failures, TAP errors
 
 Run MCP-specific tests:
+
 ```bash
 cargo nextest run --all-features mcp::
 ```
@@ -503,11 +558,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Integration with Claude Desktop
 
 1. Build MCP server binary:
+
 ```bash
 cargo build --release --bin tap-mcp-server
 ```
 
 2. Configure in Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
 ```json
 {
   "mcpServers": {
@@ -524,6 +581,7 @@ cargo build --release --bin tap-mcp-server
 ```
 
 3. Use in Claude:
+
 ```
 User: "Checkout at merchant.example.com for user-123 with payment intent"
 
