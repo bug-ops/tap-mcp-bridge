@@ -1,7 +1,7 @@
-//! TAP-MCP Server - MCP server binary for TAP integration with Claude Desktop
+//! TAP-MCP Server - MCP server binary for TAP integration with AI agents
 //!
 //! This binary exposes TAP (Trusted Agent Protocol) functionality as MCP tools,
-//! enabling Claude Desktop to authenticate with TAP-protected merchants.
+//! enabling AI agents to authenticate with TAP-protected merchants.
 //!
 //! # Configuration
 //!

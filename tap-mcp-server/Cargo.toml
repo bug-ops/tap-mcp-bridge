@@ -5,9 +5,9 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "MCP server binary for TAP integration with Claude Desktop"
+description = "MCP server binary for TAP integration with AI agents"
 readme = "../README.md"
-keywords = ["tap", "mcp", "server", "claude"]
+keywords = ["tap", "mcp", "server", "mcp-client"]
 categories = ["command-line-utilities"]
 
 [dependencies]
