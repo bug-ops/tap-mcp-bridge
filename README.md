@@ -110,10 +110,37 @@ ed25519-dalek = "2.2"  # For signing key generation
 Build and install the MCP server:
 
 ```bash
+# Build release binary
+cargo build --release --bin tap-mcp-server
+
+# Or install to cargo bin directory
 cargo install --path tap-mcp-server
 ```
 
-Configure in `claude_desktop_config.json`:
+#### Configuration
+
+The server requires three environment variables:
+
+- **`TAP_AGENT_ID`** (required) - Your agent identifier
+  - Format: Alphanumeric + hyphens/underscores
+  - Length: 1-64 characters
+  - Example: `agent-123`
+
+- **`TAP_AGENT_DIRECTORY`** (required) - Your agent directory URL
+  - Format: Must be HTTPS URL
+  - Example: `https://agent.example.com`
+
+- **`TAP_SIGNING_KEY`** (required) - Ed25519 private key
+  - Format: 64 hexadecimal characters (32 bytes)
+  - Example: `0123456789abcdef...` (64 hex chars)
+
+- **`RUST_LOG`** (optional) - Log level
+  - Default: `info`
+  - Options: `error`, `warn`, `info`, `debug`, `trace`
+
+#### Claude Desktop Integration
+
+Add to your `claude_desktop_config.json`:
 
 ```json
 {
@@ -123,12 +150,45 @@ Configure in `claude_desktop_config.json`:
       "env": {
         "TAP_AGENT_ID": "your-agent-id",
         "TAP_AGENT_DIRECTORY": "https://your-agent-directory.com",
-        "TAP_SIGNING_KEY": "your-hex-encoded-ed25519-key"
+        "TAP_SIGNING_KEY": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "RUST_LOG": "info"
       }
     }
   }
 }
 ```
+
+#### Available Tools
+
+The MCP server exposes two tools to Claude:
+
+1. **`checkout_with_tap`** - Execute a payment checkout with TAP authentication
+   - Parameters: merchant_url, consumer_id, intent, country_code, zip, ip_address, user_agent, platform
+   - Returns: Transaction status and merchant response
+
+2. **`browse_merchant`** - Browse merchant catalog with verified agent identity
+   - Parameters: merchant_url, consumer_id, country_code, zip, ip_address, user_agent, platform
+   - Returns: Catalog data or merchant response
+
+#### Troubleshooting
+
+**Missing environment variable:**
+```
+Error: TAP_AGENT_ID environment variable is required
+```
+Solution: Set all required environment variables in Claude Desktop config
+
+**Invalid signing key:**
+```
+Error: TAP_SIGNING_KEY must be exactly 64 hex characters
+```
+Solution: Generate a valid Ed25519 key and encode as hex (64 chars)
+
+**Invalid URL:**
+```
+Error: TAP_AGENT_DIRECTORY must be an HTTPS URL
+```
+Solution: Use HTTPS URL (not HTTP) for agent directory
 
 ## Quick Start
 

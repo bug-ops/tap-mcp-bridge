@@ -14,8 +14,8 @@ categories = ["command-line-utilities"]
 # Library crate with all TAP functionality
 tap-mcp-bridge = { path = "../tap-mcp-bridge" }
 
-# MCP Protocol
-rmcp.workspace = true
+# MCP Protocol (with server and macros features for tool_router)
+rmcp = { workspace = true, features = ["server", "macros", "transport-io"] }
 
 # Async Runtime (full features for binary)
 tokio = { workspace = true, features = ["signal"] }
@@ -35,6 +35,9 @@ tracing-subscriber.workspace = true
 # Cryptography (for key parsing)
 ed25519-dalek.workspace = true
 hex.workspace = true
+
+# URL parsing (for validation)
+url.workspace = true
 
 [lints]
 workspace = true
