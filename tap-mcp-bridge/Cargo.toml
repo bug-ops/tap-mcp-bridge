@@ -1,0 +1,66 @@
+[package]
+name = "tap-mcp-bridge"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A bridge library for TAP-MCP integration"
+readme = "../README.md"
+keywords = ["tap", "mcp", "bridge", "integration"]
+categories = ["development-tools"]
+
+[package.metadata.cargo-udeps.ignore]
+normal = [
+    "rmcp",         # Used for MCP server integration
+    "jsonwebtoken", # Used for ID Token (JWT) generation
+    "josekit",      # Used for JWE encryption in APC
+    "secrecy",      # Used for ACRO/APC sensitive data handling
+]
+
+[dependencies]
+# MCP Protocol
+rmcp.workspace = true
+
+# Cryptography (TAP signatures) - trait-based API
+signature.workspace = true
+ed25519-dalek.workspace = true
+sha2.workspace = true
+base64.workspace = true
+uuid.workspace = true
+hex.workspace = true
+zeroize.workspace = true
+
+# HTTP Client (using rustls to avoid OpenSSL on Windows)
+reqwest.workspace = true
+url.workspace = true
+
+# Async Runtime (minimal features for library)
+tokio.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Error Handling
+thiserror.workspace = true
+
+# Logging (basic only)
+tracing.workspace = true
+
+# JWT/JWK support for TAP (aws_lc_rs backend for better performance)
+jsonwebtoken.workspace = true
+
+# JWE encryption for APC (RFC 7516) - vendored OpenSSL for Windows compatibility
+josekit.workspace = true
+
+# Sensitive data handling for ACRO/APC
+secrecy.workspace = true
+
+[dev-dependencies]
+
+[features]
+default = []
+
+[lints]
+workspace = true
