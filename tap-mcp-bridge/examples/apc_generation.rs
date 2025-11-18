@@ -117,11 +117,7 @@ mwIDAQAB
     println!("   Routing Number: ****{}", routing_last_4);
     println!("   Account Type: {}", account.account_type);
     // Redact account holder name (show only first character)
-    let holder_first = account
-        .account_holder_name
-        .chars()
-        .next()
-        .unwrap_or('*');
+    let holder_first = account.account_holder_name.chars().next().unwrap_or('*');
     println!("   Account Holder: {}***\n", holder_first);
 
     let payment_method = PaymentMethod::BankAccount(account);
@@ -150,11 +146,7 @@ mwIDAQAB
     println!("8. Digital Wallet Payment Data");
     println!("   Wallet Type: {}", wallet.wallet_type);
     // Redact account holder name (show only first character)
-    let wallet_holder_first = wallet
-        .account_holder_name
-        .chars()
-        .next()
-        .unwrap_or('*');
+    let wallet_holder_first = wallet.account_holder_name.chars().next().unwrap_or('*');
     println!("   Account Holder: {}***\n", wallet_holder_first);
 
     let payment_method = PaymentMethod::DigitalWallet(wallet);
