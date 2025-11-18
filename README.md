@@ -92,6 +92,7 @@ tap-mcp-bridge = "0.1.0"
 ed25519-dalek = "2.2"
 tokio = { version = "1.48", features = ["rt", "macros"] }
 ```
+Solution: Use HTTPS URL (not HTTP) for agent directory
 
 **Execute a TAP checkout:**
 
