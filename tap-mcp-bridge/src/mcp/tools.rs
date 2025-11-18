@@ -4,7 +4,7 @@ use std::{sync::LazyLock, time::Duration};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, instrument};
 
 use crate::{
     error::{BridgeError, Result},
@@ -138,17 +138,12 @@ pub struct BrowseResult {
 /// # Ok(())
 /// # }
 /// ```
+#[instrument(skip(signer, params), fields(merchant_url = %params.merchant_url, consumer_id = %params.consumer_id, interaction_type = "checkout"))]
 pub async fn checkout_with_tap(
     signer: &TapSigner,
     params: CheckoutParams,
 ) -> Result<CheckoutResult> {
-    info!(
-        merchant_url = %params.merchant_url,
-        consumer_id = %params.consumer_id,
-        method = "POST",
-        interaction_type = "checkout",
-        "executing TAP checkout"
-    );
+    info!(method = "POST", "executing TAP checkout");
 
     let path = format!("/checkout?consumer_id={}&intent={}", params.consumer_id, params.intent);
 
@@ -174,12 +169,7 @@ pub async fn checkout_with_tap(
     )
     .await?;
 
-    info!(
-        merchant_url = %params.merchant_url,
-        consumer_id = %params.consumer_id,
-        status = "completed",
-        "TAP checkout completed"
-    );
+    info!(status = "completed", "TAP checkout completed");
 
     Ok(CheckoutResult {
         status: "completed".to_owned(),
@@ -220,14 +210,9 @@ pub async fn checkout_with_tap(
 /// # Ok(())
 /// # }
 /// ```
+#[instrument(skip(signer, params), fields(merchant_url = %params.merchant_url, consumer_id = %params.consumer_id, interaction_type = "browse"))]
 pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result<BrowseResult> {
-    info!(
-        merchant_url = %params.merchant_url,
-        consumer_id = %params.consumer_id,
-        method = "GET",
-        interaction_type = "browse",
-        "browsing merchant catalog"
-    );
+    info!(method = "GET", "browsing merchant catalog");
 
     let path = format!("/catalog?consumer_id={}", params.consumer_id);
 
@@ -253,12 +238,7 @@ pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result
     )
     .await?;
 
-    info!(
-        merchant_url = %params.merchant_url,
-        consumer_id = %params.consumer_id,
-        status = "completed",
-        "browse catalog completed"
-    );
+    info!(status = "completed", "browse catalog completed");
 
     Ok(BrowseResult {
         status: "completed".to_owned(),
@@ -270,6 +250,7 @@ pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result
 ///
 /// Includes Agentic Consumer Recognition Object (ACRO) in the request body for consumer identity
 /// verification.
+#[instrument(skip(signer, contextual_data), fields(merchant_url, consumer_id, method, path, interaction_type = ?interaction_type))]
 async fn execute_tap_request_with_acro(
     signer: &TapSigner,
     merchant_url: &str,

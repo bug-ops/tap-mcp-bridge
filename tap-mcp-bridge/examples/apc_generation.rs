@@ -108,9 +108,17 @@ mwIDAQAB
 
     println!("6. Bank Account Payment Data");
     println!("   Account Number: ****{}", account.last_four());
-    println!("   Routing Number: {}", account.routing_number);
+    // Redact routing number for security (show only last 4 digits)
+    let routing_last_4 = if account.routing_number.len() >= 4 {
+        &account.routing_number[account.routing_number.len() - 4..]
+    } else {
+        &account.routing_number
+    };
+    println!("   Routing Number: ****{}", routing_last_4);
     println!("   Account Type: {}", account.account_type);
-    println!("   Account Holder: {}\n", account.account_holder_name);
+    // Redact account holder name (show only first character)
+    let holder_first = account.account_holder_name.chars().next().unwrap_or('*');
+    println!("   Account Holder: {}***\n", holder_first);
 
     let payment_method = PaymentMethod::BankAccount(account);
     let apc = signer.generate_apc(&nonce, &payment_method, &merchant_key)?;
@@ -137,7 +145,9 @@ mwIDAQAB
 
     println!("8. Digital Wallet Payment Data");
     println!("   Wallet Type: {}", wallet.wallet_type);
-    println!("   Account Holder: {}\n", wallet.account_holder_name);
+    // Redact account holder name (show only first character)
+    let wallet_holder_first = wallet.account_holder_name.chars().next().unwrap_or('*');
+    println!("   Account Holder: {}***\n", wallet_holder_first);
 
     let payment_method = PaymentMethod::DigitalWallet(wallet);
     let apc = signer.generate_apc(&nonce, &payment_method, &merchant_key)?;

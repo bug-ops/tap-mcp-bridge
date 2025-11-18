@@ -28,10 +28,13 @@
     reason = "Transitive dependency version conflicts from rmcp and reqwest"
 )]
 
-use std::{env, sync::Arc};
+mod observability;
+
+use std::{env, sync::Arc, time::Instant};
 
 use anyhow::{Context, Result, bail};
 use ed25519_dalek::SigningKey;
+use observability::{HealthCheck, HealthReport, LogFormat};
 use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
     handler::server::{tool::ToolRouter, wrapper::Parameters},
@@ -48,8 +51,7 @@ use tap_mcp_bridge::{
     mcp::{BrowseParams, CheckoutParams, browse_merchant, checkout_with_tap},
     tap::TapSigner,
 };
-use tracing::{error, info};
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+use tracing::{error, info, instrument};
 
 /// Configuration for TAP-MCP server loaded from environment variables.
 #[derive(Debug, Clone)]
@@ -148,19 +150,6 @@ impl Config {
     }
 }
 
-/// Initializes logging with tracing-subscriber.
-///
-/// Respects `RUST_LOG` environment variable for log level filtering.
-/// Default log level is "info" if `RUST_LOG` is not set.
-fn init_logging() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_target(false).with_thread_ids(false))
-        .with(filter)
-        .init();
-}
-
 /// Creates TAP signer from configuration.
 ///
 /// Parses the hex-encoded signing key and creates a `TapSigner` instance.
@@ -236,6 +225,10 @@ pub struct TapMcpServer {
     signer: Arc<TapSigner>,
     /// Tool router for MCP tool registration
     tool_router: ToolRouter<Self>,
+    /// Server start time for uptime tracking
+    start_time: Arc<Instant>,
+    /// Agent ID for health reporting
+    agent_id: Arc<str>,
 }
 
 impl std::fmt::Debug for TapMcpServer {
@@ -243,31 +236,34 @@ impl std::fmt::Debug for TapMcpServer {
         f.debug_struct("TapMcpServer")
             .field("signer", &"[TapSigner]")
             .field("tool_router", &"[ToolRouter]")
+            .field("start_time", &self.start_time)
+            .field("agent_id", &self.agent_id)
             .finish()
     }
 }
 
 #[tool_router]
 impl TapMcpServer {
-    /// Creates a new TAP-MCP server with the given signer.
-    fn new(signer: TapSigner) -> Self {
-        Self { signer: Arc::new(signer), tool_router: Self::tool_router() }
+    /// Creates a new TAP-MCP server with the given signer and agent ID.
+    fn new(signer: TapSigner, agent_id: &str) -> Self {
+        Self {
+            signer: Arc::new(signer),
+            tool_router: Self::tool_router(),
+            start_time: Arc::new(Instant::now()),
+            agent_id: Arc::from(agent_id),
+        }
     }
 
     /// Execute a payment checkout with TAP authentication
     #[tool(
         description = "Execute a payment checkout with TAP (Trusted Agent Protocol) authentication"
     )]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, consumer_id = %params.0.consumer_id))]
     async fn checkout_with_tap(
         &self,
         params: Parameters<CheckoutRequest>,
     ) -> Result<CallToolResult, McpError> {
-        info!(
-            tool = "checkout_with_tap",
-            merchant_url = %params.0.merchant_url,
-            consumer_id = %params.0.consumer_id,
-            "received tool invocation"
-        );
+        info!(tool = "checkout_with_tap", "processing checkout request");
 
         // Convert MCP params to library params
         let checkout_params = CheckoutParams {
@@ -287,10 +283,7 @@ impl TapMcpServer {
             McpError::invalid_request(format!("Checkout failed: {e}"), None)
         })?;
 
-        info!(
-            status = %result.status,
-            "checkout completed successfully"
-        );
+        info!(status = %result.status, "checkout completed successfully");
 
         // Return result
         Ok(CallToolResult::success(vec![Content::text(format!(
@@ -303,16 +296,12 @@ impl TapMcpServer {
     #[tool(
         description = "Browse merchant catalog with TAP (Trusted Agent Protocol) authentication"
     )]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, consumer_id = %params.0.consumer_id))]
     async fn browse_merchant(
         &self,
         params: Parameters<BrowseRequest>,
     ) -> Result<CallToolResult, McpError> {
-        info!(
-            tool = "browse_merchant",
-            merchant_url = %params.0.merchant_url,
-            consumer_id = %params.0.consumer_id,
-            "received tool invocation"
-        );
+        info!(tool = "browse_merchant", "processing browse request");
 
         // Convert MCP params to library params
         let browse_params = BrowseParams {
@@ -331,16 +320,63 @@ impl TapMcpServer {
             McpError::invalid_request(format!("Browse failed: {e}"), None)
         })?;
 
-        info!(
-            status = %result.status,
-            "browse completed successfully"
-        );
+        info!(status = %result.status, "browse completed successfully");
 
         // Return result
         Ok(CallToolResult::success(vec![Content::text(format!(
             "Status: {}\nData: {}",
             result.status, result.data
         ))]))
+    }
+
+    /// Verify agent identity and report health status
+    #[tool(description = "Verify agent identity and check server health status")]
+    #[instrument(skip(self, _params), fields(agent_id = %self.agent_id))]
+    async fn verify_agent_identity(
+        &self,
+        _params: Parameters<()>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "verify_agent_identity", "processing health check");
+
+        let uptime_secs = self.start_time.elapsed().as_secs();
+
+        let mut checks = Vec::new();
+
+        // Check 1: Signing key loaded
+        checks.push(HealthCheck::pass_with_message(
+            "signing_key",
+            "Ed25519 signing key loaded successfully",
+        ));
+
+        // Check 2: JWKS generation
+        match self.signer.generate_jwks().to_json() {
+            Ok(_) => checks.push(HealthCheck::pass_with_message(
+                "jwks_generation",
+                "JWKS generated successfully",
+            )),
+            Err(e) => checks
+                .push(HealthCheck::fail("jwks_generation", format!("JWKS generation failed: {e}"))),
+        }
+
+        // Determine overall status
+        let status = HealthReport::compute_status(&checks);
+
+        let report = HealthReport {
+            status,
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            agent_id: self.agent_id.to_string(),
+            uptime_secs,
+            checks,
+        };
+
+        let json = report.to_json().map_err(|e| {
+            error!(error = %e, "health report serialization failed");
+            McpError::internal_error(format!("Health report serialization failed: {e}"), None)
+        })?;
+
+        info!(status = %report.status.as_str(), uptime_secs, "health check completed");
+
+        Ok(CallToolResult::success(vec![Content::text(json)]))
     }
 }
 
@@ -375,10 +411,15 @@ impl ServerHandler for TapMcpServer {
 /// Returns error if initialization, configuration, or server execution fails.
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging first
-    init_logging();
+    // Initialize observability first
+    let log_format = LogFormat::from_env();
+    observability::init_observability(log_format);
 
-    info!("Starting TAP-MCP Server");
+    info!(
+        log_format = ?log_format,
+        version = %env!("CARGO_PKG_VERSION"),
+        "Starting TAP-MCP Server"
+    );
 
     // Load and validate configuration
     let config = Config::from_env().context("Failed to load configuration")?;
@@ -394,9 +435,12 @@ async fn main() -> Result<()> {
     info!("TAP signer created successfully");
 
     // Create server with tools
-    let server = TapMcpServer::new(signer);
+    let server = TapMcpServer::new(signer, &config.agent_id);
 
-    info!("MCP server configured with tools: checkout_with_tap, browse_merchant");
+    info!(
+        "MCP server configured with tools: checkout_with_tap, browse_merchant, \
+         verify_agent_identity"
+    );
     info!("MCP server started, listening on stdio");
     info!("Press Ctrl+C to shutdown");
 
