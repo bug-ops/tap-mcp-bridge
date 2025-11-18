@@ -28,27 +28,25 @@ This enables AI agents to:
 
 ## Architecture
 
-```
-┌─────────────────┐
-│   AI Agent      │  Claude or other MCP-compatible agent
-│   (Claude)      │
-└────────┬────────┘
-         │ MCP Protocol (JSON-RPC 2.0)
-         │
-┌────────▼──────────────────────────────────────┐
-│           TAP-MCP Bridge (this crate)         │
-│  ┌──────────────┐      ┌──────────────────┐   │
-│  │  MCP Tools   │──────│  TAP Signatures  │   │
-│  │  - checkout  │      │  - RFC 9421      │   │
-│  │  - browse    │      │  - Ed25519       │   │
-│  │  - verify    │      │  - JWE (APC)     │   │
-│  └──────────────┘      └──────────────────┘   │
-└────────┬──────────────────────────────────────┘
-         │ HTTPS + TAP Signatures
-         │
-┌────────▼────────┐
-│  TAP Merchant   │  E-commerce merchant with TAP support
-└─────────────────┘
+```mermaid
+graph TB
+    Agent[AI Agent Claude]
+    Bridge[TAP-MCP Bridge<br/>this crate]
+    Tools[MCP Tools<br/>checkout, browse, verify]
+    TAPClient[TAP Signatures<br/>RFC 9421, Ed25519, JWE]
+    Merchant[TAP Merchant<br/>E-commerce]
+
+    Agent -->|"MCP Protocol<br/>(JSON-RPC 2.0)"| Bridge
+    Bridge --> Tools
+    Bridge --> TAPClient
+    Tools -.-> TAPClient
+    TAPClient -->|"HTTPS + TAP Signatures<br/>(Ed25519, JWE)"| Merchant
+
+    style Agent fill:#e1f5ff
+    style Bridge fill:#fff4e1
+    style Tools fill:#f0f0f0
+    style TAPClient fill:#f0f0f0
+    style Merchant fill:#e8f5e9
 ```
 
 ### Key Components
