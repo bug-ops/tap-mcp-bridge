@@ -9,6 +9,7 @@ description = "A bridge library for TAP-MCP integration"
 readme = "../README.md"
 keywords = ["tap", "mcp", "bridge", "integration"]
 categories = ["development-tools"]
+publish = true
 
 [package.metadata.cargo-udeps.ignore]
 normal = [
