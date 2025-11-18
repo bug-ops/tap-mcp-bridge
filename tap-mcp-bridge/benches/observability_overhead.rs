@@ -8,7 +8,10 @@
 //!
 //! Run with: `cargo bench --bench observability_overhead`
 
-#![allow(clippy::let_underscore_must_use, reason = "Criterion benchmarks ignore results")]
+#![allow(
+    clippy::let_underscore_must_use,
+    reason = "Criterion benchmarks ignore results"
+)]
 #![allow(missing_docs, reason = "Benchmark functions are self-documenting")]
 
 use std::hint::black_box;
