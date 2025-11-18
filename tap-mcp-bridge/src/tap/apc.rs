@@ -934,7 +934,7 @@ mwIDAQAB
             cardholder_name: "John Doe".to_owned(),
         };
 
-        let debug_output = format!("{:?}", card);
+        let debug_output = format!("{card:?}");
 
         // PAN must not leak
         assert!(
@@ -943,16 +943,10 @@ mwIDAQAB
         );
 
         // CVV must not leak
-        assert!(
-            !debug_output.contains("123"),
-            "CVV must not appear in Debug output"
-        );
+        assert!(!debug_output.contains("123"), "CVV must not appear in Debug output");
 
         // Should show masked PAN (last 4 digits)
-        assert!(
-            debug_output.contains("****1111"),
-            "Should show masked PAN with last 4 digits"
-        );
+        assert!(debug_output.contains("****1111"), "Should show masked PAN with last 4 digits");
 
         // Should show redacted CVV
         assert!(debug_output.contains("***"), "Should show redacted CVV");
@@ -960,10 +954,7 @@ mwIDAQAB
         // Non-sensitive fields should be visible
         assert!(debug_output.contains("12"), "Expiry month should be visible");
         assert!(debug_output.contains("25"), "Expiry year should be visible");
-        assert!(
-            debug_output.contains("John Doe"),
-            "Cardholder name should be visible"
-        );
+        assert!(debug_output.contains("John Doe"), "Cardholder name should be visible");
     }
 
     #[test]
@@ -975,7 +966,7 @@ mwIDAQAB
             account_holder_name: "Jane Doe".to_owned(),
         };
 
-        let debug_output = format!("{:?}", account);
+        let debug_output = format!("{account:?}");
 
         // Account number must not leak
         assert!(
@@ -996,20 +987,11 @@ mwIDAQAB
         );
 
         // Should show redacted routing number
-        assert!(
-            debug_output.contains("*****"),
-            "Should show redacted routing number"
-        );
+        assert!(debug_output.contains("*****"), "Should show redacted routing number");
 
         // Non-sensitive fields should be visible
-        assert!(
-            debug_output.contains("checking"),
-            "Account type should be visible"
-        );
-        assert!(
-            debug_output.contains("Jane Doe"),
-            "Account holder name should be visible"
-        );
+        assert!(debug_output.contains("checking"), "Account type should be visible");
+        assert!(debug_output.contains("Jane Doe"), "Account holder name should be visible");
     }
 
     #[test]
