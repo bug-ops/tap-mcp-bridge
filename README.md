@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org)
 [![TAP Compliance](https://img.shields.io/badge/TAP%20compliance-100%25-brightgreen.svg)](docs/TAP_SPECIFICATION.md)
-[![Tests](https://img.shields.io/badge/tests-109%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-122%20passing-brightgreen.svg)](#testing)
 [![Workspace](https://img.shields.io/badge/workspace-library%20%2B%20binary-blue.svg)](#project-structure)
 
 ---
@@ -44,7 +44,7 @@ The TAP-MCP Bridge acts as a **protocol adapter**, translating between:
 | Metric | Status |
 |--------|--------|
 | **TAP Compliance** | 100% (18/18 requirements) |
-| **Test Coverage** | 109 tests passing (104 unit + 5 binary) |
+| **Test Coverage** | 122 tests passing (104 unit + 18 binary) |
 | **Security** | PCI-DSS compliant, RFC 7516 JWE encryption |
 | **Code Quality** | 0 warnings, Microsoft Rust Guidelines compliant |
 | **Platform Support** | macOS, Linux, Windows |
@@ -78,9 +78,10 @@ cargo install --path tap-mcp-server
 }
 ```
 
-**3. Start your MCP client** - The TAP server will be available with two tools:
+**3. Start your MCP client** - The TAP server will be available with three tools:
 - `checkout_with_tap` - Execute payment with TAP authentication
 - `browse_merchant` - Browse merchant catalog
+- `verify_agent_identity` - Health check and agent verification
 
 ### For Rust Developers
 
@@ -260,9 +261,17 @@ Error: TAP_AGENT_DIRECTORY must be an HTTPS URL
 ⚡ **Async/Await** - Built on Tokio for concurrent operations
 📚 **Comprehensive Documentation** - Rustdoc with examples for all public APIs
 🎯 **Type-Safe Errors** - Context-rich errors via `thiserror`
-🧪 **Extensive Testing** - 109 automated tests (104 unit + 5 binary)
+🧪 **Extensive Testing** - 122 automated tests (104 unit + 18 binary)
 ✅ **Zero Warnings** - Strict clippy lints enforced
 🌍 **Cross-Platform** - Works on macOS, Linux, Windows
+
+### Observability Features
+
+📊 **Structured Logging** - JSON or pretty-printed logs with contextual fields
+🔍 **Request Correlation** - Automatic span tracking for all operations
+❤️ **Health Checks** - Built-in health verification via MCP tool
+📈 **Instrumentation** - Distributed tracing-compatible spans
+🎯 **Contextual Fields** - merchant_url, consumer_id, nonce, interaction_type in all logs
 
 ---
 
@@ -394,6 +403,7 @@ cargo doc --no-deps --all-features --open
 |-------|-------------|
 | [TAP Specification](docs/TAP_SPECIFICATION.md) | Detailed TAP protocol implementation guide |
 | [MCP Integration](docs/MCP_INTEGRATION.md) | MCP protocol and tool integration |
+| [Observability Guide](docs/OBSERVABILITY.md) | Logging, monitoring, and health checks |
 | [Library Overview](tap-mcp-bridge/src/lib.rs) | Architecture overview and integration guide |
 | [Error Types](tap-mcp-bridge/src/error.rs) | All error variants with recovery strategies |
 

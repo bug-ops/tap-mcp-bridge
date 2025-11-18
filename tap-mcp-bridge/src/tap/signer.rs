@@ -5,6 +5,7 @@ use std::{sync::Arc, time::SystemTime};
 use ed25519_dalek::SigningKey;
 use sha2::{Digest, Sha256};
 use signature::Signer;
+use tracing::instrument;
 use uuid::Uuid;
 
 use crate::error::{BridgeError, Result};
@@ -99,6 +100,7 @@ impl TapSigner {
     /// # Ok(())
     /// # }
     /// ```
+    #[instrument(skip(self, body), fields(method, authority, path, body_len = body.len(), interaction_type = ?interaction_type))]
     pub fn sign_request(
         &self,
         method: &str,
@@ -234,6 +236,7 @@ impl TapSigner {
     /// # Ok(())
     /// # }
     /// ```
+    #[instrument(skip(self), fields(consumer_id, merchant_url, nonce))]
     pub fn generate_id_token(
         &self,
         consumer_id: &str,
@@ -300,6 +303,7 @@ impl TapSigner {
     /// # Ok(())
     /// # }
     /// ```
+    #[instrument(skip(self, id_token, contextual_data), fields(nonce, id_token_len = id_token.len()))]
     pub fn generate_acro(
         &self,
         nonce: &str,
@@ -367,6 +371,7 @@ impl TapSigner {
     /// # Ok(())
     /// # }
     /// ```
+    #[instrument(skip(self, payment_method, merchant_public_key), fields(nonce))]
     pub fn generate_apc(
         &self,
         nonce: &str,
