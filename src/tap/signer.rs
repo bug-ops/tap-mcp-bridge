@@ -2,8 +2,9 @@
 
 use std::{sync::Arc, time::SystemTime};
 
-use ed25519_dalek::{Signer, SigningKey};
+use ed25519_dalek::SigningKey;
 use sha2::{Digest, Sha256};
+use signature::Signer;
 use uuid::Uuid;
 
 use crate::error::{BridgeError, Result};
@@ -83,7 +84,7 @@ impl TapSigner {
     ///
     /// ```
     /// # use tap_mcp_bridge::tap::{TapSigner, InteractionType};
-    /// # use ed25519_dalek::SigningKey;
+    /// use ed25519_dalek::SigningKey;
     /// # fn example() -> tap_mcp_bridge::error::Result<()> {
     /// let signing_key = SigningKey::from_bytes(&[0u8; 32]);
     /// let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
@@ -422,6 +423,9 @@ impl TapSigner {
 
 #[cfg(test)]
 mod tests {
+    use ed25519_dalek::Signature;
+    use signature::Verifier;
+
     use super::*;
 
     #[test]
@@ -611,8 +615,6 @@ mod tests {
 
     #[test]
     fn test_sign_request_signature_verifiable() {
-        use ed25519_dalek::{Signature, Verifier};
-
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let verifying_key = signing_key.verifying_key();
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");

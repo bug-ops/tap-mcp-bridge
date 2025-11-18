@@ -12,30 +12,35 @@ categories = ["development-tools"]
 
 [package.metadata.cargo-udeps.ignore]
 normal = [
-    "rmcp",          # Used for MCP server integration
-    "jsonwebtoken",  # Used for ID Token (JWT) generation
-    "josekit",       # Used for JWE encryption in APC
-    "secrecy",       # Used for ACRO/APC sensitive data handling
+    "rmcp",         # Used for MCP server integration
+    "jsonwebtoken", # Used for ID Token (JWT) generation
+    "josekit",      # Used for JWE encryption in APC
+    "secrecy",      # Used for ACRO/APC sensitive data handling
 ]
 
 [dependencies]
 # MCP Protocol
-rmcp = "0.8"
+rmcp = "0.9"
 
-# Cryptography (TAP signatures)
-ed25519-dalek = "2.1"
+# Cryptography (TAP signatures) - trait-based API
+signature = "2.2"
+ed25519-dalek = "2.2"
 sha2 = "0.10"
 base64 = "0.22"
-uuid = { version = "1.10", features = ["v4"] }
+uuid = { version = "1.18", features = ["v4"] }
 hex = "0.4"
 zeroize = "1.8"
 
 # HTTP Client (using rustls to avoid OpenSSL on Windows)
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+    "http2",
+] }
 url = "2.5"
 
 # Async Runtime (minimal features for MVP)
-tokio = { version = "1.35", features = ["rt", "rt-multi-thread", "macros"] }
+tokio = { version = "1.48", features = ["rt", "rt-multi-thread", "macros"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -48,7 +53,7 @@ thiserror = "2.0"
 tracing = "0.1"
 
 # JWT/JWK support for TAP (aws_lc_rs backend for better performance)
-jsonwebtoken = { version = "10.0", features = ["aws_lc_rs"] }
+jsonwebtoken = { version = "10.2", features = ["aws_lc_rs"] }
 
 # JWE encryption for APC (RFC 7516) - vendored OpenSSL for Windows compatibility
 josekit = { version = "0.10", features = ["vendored"] }
@@ -57,7 +62,9 @@ josekit = { version = "0.10", features = ["vendored"] }
 secrecy = { version = "0.10", features = ["serde"] }
 
 [dev-dependencies]
-tokio = { version = "1.35", features = ["rt", "rt-multi-thread", "macros"] }
+
+[features]
+default = []
 
 # Linting configuration following Microsoft Rust Guidelines
 [lints.rust]

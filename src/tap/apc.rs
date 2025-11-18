@@ -63,10 +63,11 @@
 //! # }
 //! ```
 
-use ed25519_dalek::{Signer, SigningKey};
+use ed25519_dalek::SigningKey;
 use josekit::jwe::{JweEncrypter, RSA_OAEP_256};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use signature::Signer;
 use zeroize::Zeroize;
 
 use crate::error::{BridgeError, Result};

@@ -56,8 +56,9 @@
 //! # }
 //! ```
 
-use ed25519_dalek::{Signer, SigningKey};
+use ed25519_dalek::SigningKey;
 use serde::{Deserialize, Serialize};
+use signature::Signer;
 
 use crate::error::{BridgeError, Result};
 
@@ -76,7 +77,7 @@ use crate::error::{BridgeError, Result};
 /// # Examples
 ///
 /// ```
-/// use ed25519_dalek::SigningKey;
+/// # use ed25519_dalek::SigningKey;
 /// use tap_mcp_bridge::tap::{
 ///     TapSigner,
 ///     acro::{ContextualData, DeviceData},
@@ -386,7 +387,8 @@ mod tests {
 
     #[test]
     fn test_acro_signature_verifiable() {
-        use ed25519_dalek::{Signature, Verifier};
+        use ed25519_dalek::Signature;
+        use signature::Verifier;
 
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let verifying_key = signing_key.verifying_key();
