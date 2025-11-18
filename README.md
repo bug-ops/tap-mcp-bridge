@@ -90,12 +90,44 @@ graph TB
 
 ## Installation
 
+This project uses a Cargo workspace with two crates:
+
+- **`tap-mcp-bridge`** - Library crate with TAP protocol implementation
+- **`tap-mcp-server`** - Binary crate for Claude Desktop integration
+
+### As a Library
+
 Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 tap-mcp-bridge = "0.1.0"
-ed25519-dalek = "2.1"  # For signing key generation
+ed25519-dalek = "2.2"  # For signing key generation
+```
+
+### As a Binary (Claude Desktop)
+
+Build and install the MCP server:
+
+```bash
+cargo install --path tap-mcp-server
+```
+
+Configure in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "tap": {
+      "command": "tap-mcp-server",
+      "env": {
+        "TAP_AGENT_ID": "your-agent-id",
+        "TAP_AGENT_DIRECTORY": "https://your-agent-directory.com",
+        "TAP_SIGNING_KEY": "your-hex-encoded-ed25519-key"
+      }
+    }
+  }
+}
 ```
 
 ## Quick Start

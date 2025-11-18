@@ -1,24 +1,17 @@
-[package]
-name = "tap-mcp-bridge"
-version = "0.1.0"
-edition = "2024"
-authors = []
-license = "MIT OR Apache-2.0"
-description = "A bridge library for TAP-MCP integration"
-repository = "https://github.com/example/tap-mcp-bridge"
-readme = "README.md"
-keywords = ["tap", "mcp", "bridge", "integration"]
-categories = ["development-tools"]
-
-[package.metadata.cargo-udeps.ignore]
-normal = [
-    "rmcp",         # Used for MCP server integration
-    "jsonwebtoken", # Used for ID Token (JWT) generation
-    "josekit",      # Used for JWE encryption in APC
-    "secrecy",      # Used for ACRO/APC sensitive data handling
+[workspace]
+resolver = "2"
+members = [
+    "tap-mcp-bridge",
+    "tap-mcp-server",
 ]
 
-[dependencies]
+[workspace.package]
+edition = "2024"
+authors = ["Andrei G. <andrei.g@my.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bug-ops/tap-mcp-bridge"
+
+[workspace.dependencies]
 # MCP Protocol
 rmcp = "0.9"
 
@@ -39,7 +32,7 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 url = "2.5"
 
-# Async Runtime (minimal features for MVP)
+# Async Runtime
 tokio = { version = "1.48", features = ["rt", "rt-multi-thread", "macros"] }
 
 # Serialization
@@ -48,9 +41,11 @@ serde_json = "1.0"
 
 # Error Handling
 thiserror = "2.0"
+anyhow = "1.0"
 
-# Logging (basic only)
+# Logging
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # JWT/JWK support for TAP (aws_lc_rs backend for better performance)
 jsonwebtoken = { version = "10.2", features = ["aws_lc_rs"] }
@@ -61,13 +56,8 @@ josekit = { version = "0.10", features = ["vendored"] }
 # Sensitive data handling for ACRO/APC
 secrecy = { version = "0.10", features = ["serde"] }
 
-[dev-dependencies]
-
-[features]
-default = []
-
 # Linting configuration following Microsoft Rust Guidelines
-[lints.rust]
+[workspace.lints.rust]
 # Compiler lints
 ambiguous_negative_literals = "warn"
 missing_debug_implementations = "warn"
@@ -79,7 +69,7 @@ unused_lifetimes = "warn"
 unused_qualifications = "warn"
 missing_docs = "warn"
 
-[lints.clippy]
+[workspace.lints.clippy]
 # Enable all major lint categories
 cargo = { level = "warn", priority = -1 }
 complexity = { level = "warn", priority = -1 }
