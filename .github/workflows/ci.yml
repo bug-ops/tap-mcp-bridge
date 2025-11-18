@@ -28,6 +28,8 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
 
@@ -58,6 +60,8 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
 
@@ -89,6 +93,8 @@ jobs:
     needs: [check]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -148,6 +154,8 @@ jobs:
     needs: [check]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
 
@@ -173,6 +181,8 @@ jobs:
     needs: [check]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
 
@@ -198,6 +208,8 @@ jobs:
     needs: [check]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
 
@@ -224,6 +236,8 @@ jobs:
     needs: [check]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
 
@@ -247,6 +261,8 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
 
@@ -280,6 +296,7 @@ jobs:
     needs: [check, security, test, dependencies, feature-testing, msrv]
     runs-on: ubuntu-latest
     if: always()
+    permissions: {}
     steps:
       - name: Check all jobs
         run: |
