@@ -2,13 +2,13 @@
 
 ## Overview
 
-The Model Context Protocol (MCP) is Anthropic's specification for enabling AI agents like Claude to integrate with external tools and services. This document describes how MCP is implemented in the tap-mcp-bridge project to expose TAP operations as agent-callable tools.
+The Model Context Protocol (MCP) is Anthropic's specification for enabling AI agents to integrate with external tools and services. This document describes how MCP is implemented in the tap-mcp-bridge project to expose TAP operations as agent-callable tools.
 
 ## MCP Architecture
 
 ```mermaid
 graph TB
-    Agent[AI Agent Claude]
+    Agent[AI Agent / MCP Client]
     Bridge[MCP Server tap-mcp-bridge]
     Tools[Tool Registry]
     TAPClient[TAP Client]
@@ -131,7 +131,7 @@ Execute a TAP-authenticated checkout transaction.
 
 ```mermaid
 sequenceDiagram
-    participant Agent as AI Agent
+    participant Agent as MCP Client
     participant Bridge as MCP Bridge
     participant TAP as TAP Signer
     participant Merchant as TAP Merchant
@@ -209,7 +209,7 @@ Browse merchant catalog with TAP authentication.
 
 ```mermaid
 sequenceDiagram
-    participant Agent as AI Agent
+    participant Agent as MCP Client
     participant Bridge as MCP Bridge
     participant TAP as TAP Signer
     participant Merchant as TAP Merchant
@@ -394,7 +394,7 @@ async fn main() {
 }
 ```
 
-3. **Integrate with Claude Desktop**:
+3. **Integrate with MCP clients**:
 
 ```json
 {
@@ -520,7 +520,7 @@ cargo nextest run --all-features mcp::
 - **[MCP Specification](https://modelcontextprotocol.io/)**: Official Anthropic documentation
 - **[JSON-RPC 2.0](https://www.jsonrpc.org/specification)**: Base protocol
 - **[rmcp Crate](https://crates.io/crates/rmcp)**: Rust MCP SDK used by this project
-- **[Claude Desktop MCP Guide](https://docs.anthropic.com/claude/docs/tool-use)**: Integration guide
+- **[MCP Integration Guide](https://modelcontextprotocol.io/docs/concepts/tools)**: Tool integration patterns
 
 ## Example Usage
 
@@ -555,7 +555,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Integration with Claude Desktop
+### Integration with MCP Clients
 
 1. Build MCP server binary:
 
@@ -563,7 +563,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 cargo build --release --bin tap-mcp-server
 ```
 
-2. Configure in Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+2. Configure in your MCP client (config file location and format varies by client):
 
 ```json
 {
@@ -571,21 +571,21 @@ cargo build --release --bin tap-mcp-server
     "tap-bridge": {
       "command": "/path/to/tap-mcp-server",
       "env": {
-        "AGENT_ID": "agent-123",
-        "AGENT_DIRECTORY": "https://agent.example.com",
-        "SIGNING_KEY_PATH": "/secure/path/to/agent_key.pem"
+        "TAP_AGENT_ID": "agent-123",
+        "TAP_AGENT_DIRECTORY": "https://agent.example.com",
+        "TAP_SIGNING_KEY": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       }
     }
   }
 }
 ```
 
-3. Use in Claude:
+3. Use in your MCP client:
 
 ```
 User: "Checkout at merchant.example.com for user-123 with payment intent"
 
-Claude: I'll use the checkout_with_tap tool to process this transaction.
+Agent: I'll use the checkout_with_tap tool to process this transaction.
 [Calls checkout_with_tap with TAP authentication]
 
 Response: Checkout completed successfully. Transaction ID: tx-789
