@@ -13,7 +13,7 @@ use tracing::{debug, instrument, warn};
 
 use crate::{
     error::{BridgeError, Result},
-    tap::signer::TapSigner,
+    tap::{CLOCK_SKEW_TOLERANCE_SECS, TAP_MAX_VALIDITY_WINDOW_SECS, signer::TapSigner},
 };
 
 /// Verifies TAP signatures on HTTP requests.
@@ -91,11 +91,19 @@ impl TapVerifier {
 
         // Extract parameters
         // Find the opening parenthesis after "sig1="
-        let open_paren = input.find('(').ok_or_else(|| BridgeError::CryptoError("Invalid Signature-Input: missing '('".to_owned()))?;
-        let close_paren = input[open_paren..].find(')').map(|i| open_paren + i).ok_or_else(|| BridgeError::CryptoError("Invalid Signature-Input: missing ')'".to_owned()))?;
+        let open_paren = input.find('(').ok_or_else(|| {
+            BridgeError::CryptoError("Invalid Signature-Input: missing '('".to_owned())
+        })?;
+        let close_paren = input
+            .get(open_paren..)
+            .and_then(|s| s.find(')').map(|i| open_paren + i))
+            .ok_or_else(|| {
+                BridgeError::CryptoError("Invalid Signature-Input: missing ')'".to_owned())
+            })?;
         // Covered components: input[(open_paren+1)..close_paren]
         // Parameters: input[(close_paren+1)..]
-        let params_str = input.get((close_paren + 1)..)
+        let params_str = input
+            .get((close_paren + 1)..)
             .ok_or_else(|| BridgeError::CryptoError("Invalid Signature-Input format".to_owned()))?;
 
         let created = Self::extract_param(params_str, "created")?
@@ -116,16 +124,17 @@ impl TapVerifier {
             .map_err(|e| BridgeError::CryptoError(format!("System time error: {e}")))?
             .as_secs();
 
-        if now > expires {
+        // Allow grace period for clock skew per RFC 9421 Section 2.3
+        if now > expires + CLOCK_SKEW_TOLERANCE_SECS {
             return Err(BridgeError::RequestTooOld(
                 SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(expires),
             ));
         }
 
-        // TAP requires 8-minute window
-        if expires.saturating_sub(created) > 480 {
+        // TAP requires maximum 8-minute validity window
+        if expires.saturating_sub(created) > TAP_MAX_VALIDITY_WINDOW_SECS {
             return Err(BridgeError::CryptoError(
-                "Signature validity window exceeds 8 minutes".to_owned(),
+                "Signature validity window exceeds TAP maximum".to_owned(),
             ));
         }
 
@@ -135,16 +144,19 @@ impl TapVerifier {
                 BridgeError::CryptoError("Failed to acquire nonce cache lock".to_owned())
             })?;
 
+            // Check if nonce exists in cache
             if let Some(&cached_expires) = cache.get(&nonce) {
-                if cached_expires >= now {
+                // Only consider it a replay if the cached nonce hasn't expired yet
+                // (accounting for clock skew tolerance)
+                if cached_expires + CLOCK_SKEW_TOLERANCE_SECS >= now {
                     warn!(nonce, "Replay attack detected");
                     return Err(BridgeError::ReplayAttack);
-                } else {
-                    // Nonce expired, remove from cache
-                    cache.pop(&nonce);
                 }
+                // Nonce expired, will be replaced below
+                cache.pop(&nonce);
             }
 
+            // Store nonce with its expiration time
             cache.put(nonce.clone(), expires);
         };
 

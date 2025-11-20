@@ -8,7 +8,10 @@ use signature::Signer;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::error::{BridgeError, Result};
+use crate::{
+    error::{BridgeError, Result},
+    tap::TAP_MAX_VALIDITY_WINDOW_SECS,
+};
 
 /// TAP interaction type determining the signature tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,8 +118,8 @@ impl TapSigner {
             .map_err(|e| BridgeError::CryptoError(format!("system time error: {e}")))?
             .as_secs();
 
-        // TAP requirement: expires must be within 8 minutes (480 seconds) of created
-        let expires = created + 480;
+        // TAP requirement: expires must be within 8 minutes of created
+        let expires = created + TAP_MAX_VALIDITY_WINDOW_SECS;
 
         // Generate unique nonce for replay protection (TAP requirement)
         let nonce = Uuid::new_v4().to_string();
@@ -401,12 +404,15 @@ impl TapSigner {
     }
 
     /// Builds signature base string per RFC 9421 with TAP extensions.
+    ///
+    /// This function is `pub(crate)` to allow `TapVerifier` to reconstruct
+    /// the signature base for verification without exposing it as a public API.
     #[allow(
         clippy::too_many_arguments,
         reason = "RFC 9421 requires all parameters"
     )]
     #[must_use]
-    fn build_signature_base(
+    pub(crate) fn build_signature_base(
         method: &str,
         authority: &str,
         path: &str,

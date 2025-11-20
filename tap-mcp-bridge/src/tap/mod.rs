@@ -158,6 +158,19 @@
 //! This implementation satisfies all TAP specification requirements for secure
 //! agent-to-merchant authentication and payment processing.
 
+/// Maximum validity window for TAP signatures (8 minutes in seconds).
+///
+/// Per TAP specification, signatures cannot be valid for more than 480 seconds (8 minutes).
+/// This constant is used in both signature generation and verification.
+pub(crate) const TAP_MAX_VALIDITY_WINDOW_SECS: u64 = 480;
+
+/// Clock skew tolerance for timestamp validation (60 seconds).
+///
+/// RFC 9421 Section 2.3 recommends allowing a grace period for clock drift
+/// between systems. This prevents legitimate requests from being rejected
+/// due to minor clock differences.
+pub(crate) const CLOCK_SKEW_TOLERANCE_SECS: u64 = 60;
+
 pub mod acro;
 pub mod apc;
 pub mod jwk;
