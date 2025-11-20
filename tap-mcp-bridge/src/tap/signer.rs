@@ -406,7 +406,7 @@ impl TapSigner {
         reason = "RFC 9421 requires all parameters"
     )]
     #[must_use]
-    pub fn build_signature_base(
+    fn build_signature_base(
         method: &str,
         authority: &str,
         path: &str,

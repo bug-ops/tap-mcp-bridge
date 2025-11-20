@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["tap-mcp-bridge", "tap-mcp-server"]
+members = [
+    "tap-mcp-bridge",
+    "tap-mcp-server",
+]
 
 [workspace.package]
 edition = "2024"
@@ -55,10 +58,7 @@ secrecy = { version = "0.10", features = ["serde"] }
 
 # Replay protection
 lru = "0.16"
-
-[workspace.dependencies.proptest]
-version = "1.9"
-
+proptest = "1.9"
 # Linting configuration following Microsoft Rust Guidelines
 [workspace.lints.rust]
 # Compiler lints

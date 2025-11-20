@@ -90,9 +90,12 @@ impl TapVerifier {
         }
 
         // Extract parameters
-        let params_str = input
-            .split(')')
-            .nth(1)
+        // Find the opening parenthesis after "sig1="
+        let open_paren = input.find('(').ok_or_else(|| BridgeError::CryptoError("Invalid Signature-Input: missing '('".to_owned()))?;
+        let close_paren = input[open_paren..].find(')').map(|i| open_paren + i).ok_or_else(|| BridgeError::CryptoError("Invalid Signature-Input: missing ')'".to_owned()))?;
+        // Covered components: input[(open_paren+1)..close_paren]
+        // Parameters: input[(close_paren+1)..]
+        let params_str = input.get((close_paren + 1)..)
             .ok_or_else(|| BridgeError::CryptoError("Invalid Signature-Input format".to_owned()))?;
 
         let created = Self::extract_param(params_str, "created")?
@@ -132,12 +135,17 @@ impl TapVerifier {
                 BridgeError::CryptoError("Failed to acquire nonce cache lock".to_owned())
             })?;
 
-            if cache.contains(&nonce) {
-                warn!(nonce, "Replay attack detected");
-                return Err(BridgeError::ReplayAttack);
+            if let Some(&cached_expires) = cache.get(&nonce) {
+                if cached_expires >= now {
+                    warn!(nonce, "Replay attack detected");
+                    return Err(BridgeError::ReplayAttack);
+                } else {
+                    // Nonce expired, remove from cache
+                    cache.pop(&nonce);
+                }
             }
 
-            cache.put(nonce.clone(), expires)
+            cache.put(nonce.clone(), expires);
         };
 
         // 4. Reconstruct signature base
@@ -191,8 +199,14 @@ impl TapVerifier {
     fn extract_param<'a>(input: &'a str, param: &str) -> Result<&'a str> {
         input
             .split(';')
-            .find(|p| p.trim().starts_with(param))
-            .and_then(|p| p.split('=').nth(1))
+            .find_map(|p| {
+                let p = p.trim();
+                if p.starts_with(param) {
+                    p.split_once('=').map(|(_, v)| v.trim())
+                } else {
+                    None
+                }
+            })
             .ok_or_else(|| BridgeError::CryptoError(format!("Missing parameter: {param}")))
     }
 }
