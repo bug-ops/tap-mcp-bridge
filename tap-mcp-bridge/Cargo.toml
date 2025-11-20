@@ -1,6 +1,6 @@
 [package]
 name = "tap-mcp-bridge"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -58,7 +58,11 @@ josekit.workspace = true
 # Sensitive data handling for ACRO/APC
 secrecy.workspace = true
 
+# Replay protection
+lru.workspace = true
+
 [dev-dependencies]
+proptest.workspace = true
 criterion = { version = "0.7", features = ["html_reports"] }
 tokio = { workspace = true, features = ["time"] }
 tracing-subscriber.workspace = true
