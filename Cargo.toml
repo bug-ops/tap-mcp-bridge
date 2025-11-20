@@ -1,9 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "tap-mcp-bridge",
-    "tap-mcp-server",
-]
+members = ["tap-mcp-bridge", "tap-mcp-server"]
 
 [workspace.package]
 edition = "2024"
@@ -55,6 +52,12 @@ josekit = { version = "0.10", features = ["vendored"] }
 
 # Sensitive data handling for ACRO/APC
 secrecy = { version = "0.10", features = ["serde"] }
+
+# Replay protection
+lru = "0.16"
+
+[workspace.dependencies.proptest]
+version = "1.9"
 
 # Linting configuration following Microsoft Rust Guidelines
 [workspace.lints.rust]

@@ -405,7 +405,7 @@ impl TapSigner {
         clippy::too_many_arguments,
         reason = "RFC 9421 requires all parameters"
     )]
-    fn build_signature_base(
+    pub fn build_signature_base(
         method: &str,
         authority: &str,
         path: &str,

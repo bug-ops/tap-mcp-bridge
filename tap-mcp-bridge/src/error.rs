@@ -180,6 +180,19 @@ pub enum BridgeError {
     /// ```
     #[error("Invalid consumer ID: {0}")]
     InvalidConsumerId(String),
+
+    /// Replay attack detected.
+    ///
+    /// This error occurs when a request with a previously seen nonce is received
+    /// within the 8-minute validity window.
+    #[error("Replay attack detected")]
+    ReplayAttack,
+
+    /// Request too old.
+    ///
+    /// This error occurs when the request timestamp is outside the allowed window.
+    #[error("Request too old (timestamp: {0:?})")]
+    RequestTooOld(std::time::SystemTime),
 }
 
 #[cfg(test)]

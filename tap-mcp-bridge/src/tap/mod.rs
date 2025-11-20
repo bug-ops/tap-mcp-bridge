@@ -163,5 +163,10 @@ pub mod apc;
 pub mod jwk;
 pub mod jwt;
 pub mod signer;
+pub mod verifier;
 
 pub use signer::{InteractionType, TapSigner};
+pub use verifier::TapVerifier;
+
+#[cfg(test)]
+mod tests;

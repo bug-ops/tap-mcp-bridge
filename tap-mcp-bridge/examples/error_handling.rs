@@ -213,5 +213,18 @@ fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, Br
             eprintln!("   → Fix: Verify TAP implementation compatibility");
             eprintln!("   → Note: This is usually a merchant-side issue");
         }
+
+        // Security errors
+        Err(BridgeError::ReplayAttack) => {
+            eprintln!("   ✗ Replay attack detected");
+            eprintln!("   → Fix: Ensure nonces are unique");
+            eprintln!("   → Fix: Check for duplicate requests");
+        }
+
+        Err(BridgeError::RequestTooOld(time)) => {
+            eprintln!("   ✗ Request too old: {:?}", time);
+            eprintln!("   → Fix: Check system clock synchronization");
+            eprintln!("   → Fix: Ensure request is sent immediately after signing");
+        }
     }
 }
