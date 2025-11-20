@@ -36,13 +36,15 @@ impl TapVerifier {
     /// # Arguments
     ///
     /// * `capacity` - Maximum number of nonces to store for replay protection.
-    ///                Recommended: 10,000+ for high-traffic services.
+    ///   Recommended: 10,000+ for high-traffic services.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the default capacity (1000) is invalid (should never happen).
     #[must_use]
     pub fn new(capacity: usize) -> Self {
-        let cap = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(1000).unwrap());
-        Self {
-            nonce_cache: Arc::new(Mutex::new(LruCache::new(cap))),
-        }
+        let cap = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(1000).expect("1000 is non-zero"));
+        Self { nonce_cache: Arc::new(Mutex::new(LruCache::new(cap))) }
     }
 
     /// Verifies an HTTP request signature.
@@ -61,6 +63,7 @@ impl TapVerifier {
     ///
     /// Returns error if verification fails for any reason (invalid signature,
     /// expired, replay detected, etc.).
+    #[allow(clippy::too_many_arguments, reason = "RFC 9421 verification requires many parameters")]
     #[instrument(skip(self, body, verifying_key), fields(method, authority, path))]
     pub fn verify_request(
         &self,
@@ -77,27 +80,26 @@ impl TapVerifier {
         let input = signature_input_header.trim();
         if !input.starts_with("sig1=(") {
             return Err(BridgeError::CryptoError(
-                "Invalid Signature-Input: must start with sig1=".to_string(),
+                "Invalid Signature-Input: must start with sig1=".to_owned(),
             ));
         }
 
         // Extract parameters
-        let params_str = input
-            .split(')')
-            .nth(1)
-            .ok_or_else(|| BridgeError::CryptoError("Invalid Signature-Input format".to_string()))?;
-
-        let created = self.extract_param(params_str, "created")?.parse::<u64>().map_err(|_| {
-            BridgeError::CryptoError("Invalid created timestamp".to_string())
+        let params_str = input.split(')').nth(1).ok_or_else(|| {
+            BridgeError::CryptoError("Invalid Signature-Input format".to_owned())
         })?;
 
-        let expires = self.extract_param(params_str, "expires")?.parse::<u64>().map_err(|_| {
-            BridgeError::CryptoError("Invalid expires timestamp".to_string())
-        })?;
+        let created = Self::extract_param(params_str, "created")?
+            .parse::<u64>()
+            .map_err(|_| BridgeError::CryptoError("Invalid created timestamp".to_owned()))?;
 
-        let nonce = self.extract_param(params_str, "nonce")?.trim_matches('"').to_string();
-        let tag = self.extract_param(params_str, "tag")?.trim_matches('"');
-        let keyid = self.extract_param(params_str, "keyid")?.trim_matches('"');
+        let expires = Self::extract_param(params_str, "expires")?
+            .parse::<u64>()
+            .map_err(|_| BridgeError::CryptoError("Invalid expires timestamp".to_owned()))?;
+
+        let nonce = Self::extract_param(params_str, "nonce")?.trim_matches('"').to_owned();
+        let tag = Self::extract_param(params_str, "tag")?.trim_matches('"');
+        let keyid = Self::extract_param(params_str, "keyid")?.trim_matches('"');
 
         // 2. Validate timestamps
         let now = SystemTime::now()
@@ -106,18 +108,22 @@ impl TapVerifier {
             .as_secs();
 
         if now > expires {
-            return Err(BridgeError::RequestTooOld(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(expires)));
+            return Err(BridgeError::RequestTooOld(
+                SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(expires),
+            ));
         }
 
         // TAP requires 8-minute window
         if expires.saturating_sub(created) > 480 {
-             return Err(BridgeError::CryptoError("Signature validity window exceeds 8 minutes".to_string()));
+            return Err(BridgeError::CryptoError(
+                "Signature validity window exceeds 8 minutes".to_owned(),
+            ));
         }
 
         // 3. Check replay protection
         {
             let mut cache = self.nonce_cache.lock().map_err(|_| {
-                BridgeError::CryptoError("Failed to acquire nonce cache lock".to_string())
+                BridgeError::CryptoError("Failed to acquire nonce cache lock".to_owned())
             })?;
 
             if cache.contains(&nonce) {
@@ -125,12 +131,12 @@ impl TapVerifier {
                 return Err(BridgeError::ReplayAttack);
             }
 
-            cache.put(nonce.clone(), expires);
-        }
+            cache.put(nonce.clone(), expires)
+        };
 
         // 4. Reconstruct signature base
         let content_digest = TapSigner::compute_content_digest(body);
-        
+
         // Verify content-digest matches if present in input (it should be)
         // Note: In a full implementation we would parse the list of covered components.
         // For TAP, we enforce specific components.
@@ -153,14 +159,18 @@ impl TapVerifier {
             .trim()
             .strip_prefix("sig1=:")
             .and_then(|s| s.strip_suffix(':'))
-            .ok_or_else(|| BridgeError::CryptoError("Invalid Signature header format".to_string()))?;
+            .ok_or_else(|| {
+                BridgeError::CryptoError("Invalid Signature header format".to_owned())
+            })?;
 
         let sig_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, sig_b64)
             .map_err(|e| BridgeError::CryptoError(format!("Invalid base64 signature: {e}")))?;
 
-        let signature = Signature::from_bytes(&sig_bytes.try_into().map_err(|_| {
-            BridgeError::CryptoError("Invalid signature length".to_string())
-        })?);
+        let signature = Signature::from_bytes(
+            &sig_bytes
+                .try_into()
+                .map_err(|_| BridgeError::CryptoError("Invalid signature length".to_owned()))?,
+        );
 
         verifying_key.verify(signature_base.as_bytes(), &signature).map_err(|e| {
             warn!(error = %e, "Signature verification failed");
@@ -172,7 +182,7 @@ impl TapVerifier {
     }
 
     /// Helper to extract parameter value from Signature-Input string
-    fn extract_param<'a>(&self, input: &'a str, param: &str) -> Result<&'a str> {
+    fn extract_param<'a>(input: &'a str, param: &str) -> Result<&'a str> {
         input
             .split(';')
             .find(|p| p.trim().starts_with(param))
@@ -183,8 +193,9 @@ impl TapVerifier {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ed25519_dalek::SigningKey;
+
+    use super::*;
     use crate::tap::signer::InteractionType;
 
     #[test]
@@ -199,13 +210,9 @@ mod tests {
         let path = "/checkout";
         let body = b"test";
 
-        let sig = signer.sign_request(
-            method,
-            authority,
-            path,
-            body,
-            InteractionType::Checkout,
-        ).unwrap();
+        let sig = signer
+            .sign_request(method, authority, path, body, InteractionType::Checkout)
+            .unwrap();
 
         let result = verifier.verify_request(
             method,
@@ -227,21 +234,34 @@ mod tests {
         let signer = TapSigner::new(signing_key, "agent-1", "https://agent.com");
         let verifier = TapVerifier::new(100);
 
-        let sig = signer.sign_request(
-            "POST", "merchant.com", "/checkout", b"test",
-            InteractionType::Checkout,
-        ).unwrap();
+        let sig = signer
+            .sign_request("POST", "merchant.com", "/checkout", b"test", InteractionType::Checkout)
+            .unwrap();
 
         // First verification should succeed
-        assert!(verifier.verify_request(
-            "POST", "merchant.com", "/checkout", b"test",
-            &sig.signature, &sig.signature_input, &verifying_key,
-        ).is_ok());
+        assert!(
+            verifier
+                .verify_request(
+                    "POST",
+                    "merchant.com",
+                    "/checkout",
+                    b"test",
+                    &sig.signature,
+                    &sig.signature_input,
+                    &verifying_key,
+                )
+                .is_ok()
+        );
 
         // Second verification with same nonce should fail
         let result = verifier.verify_request(
-            "POST", "merchant.com", "/checkout", b"test",
-            &sig.signature, &sig.signature_input, &verifying_key,
+            "POST",
+            "merchant.com",
+            "/checkout",
+            b"test",
+            &sig.signature,
+            &sig.signature_input,
+            &verifying_key,
         );
 
         assert!(matches!(result, Err(BridgeError::ReplayAttack)));

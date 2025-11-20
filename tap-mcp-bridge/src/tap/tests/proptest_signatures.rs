@@ -1,5 +1,6 @@
 use ed25519_dalek::SigningKey;
 use proptest::prelude::*;
+
 use crate::tap::{InteractionType, TapSigner, TapVerifier};
 
 proptest! {

@@ -16,6 +16,7 @@
     clippy::print_stderr,
     clippy::str_to_string,
     clippy::uninlined_format_args,
+    clippy::use_debug,
     reason = "examples are allowed to use println and simple formatting"
 )]
 
@@ -65,14 +66,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Invalid URL (HTTP instead of HTTPS)
     println!("Example 1: Testing HTTP URL (should fail)");
     let params = CheckoutParams {
-        merchant_url: "http://merchant.example.com".to_string(),
-        consumer_id: "user-123".to_string(),
-        intent: "payment".to_string(),
-        country_code: "US".to_string(),
-        zip: "94103".to_string(),
-        ip_address: "192.168.1.100".to_string(),
-        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_string(),
-        platform: "Linux".to_string(),
+        merchant_url: "http://merchant.example.com".to_owned(),
+        consumer_id: "user-123".to_owned(),
+        intent: "payment".to_owned(),
+        country_code: "US".to_owned(),
+        zip: "94103".to_owned(),
+        ip_address: "192.168.1.100".to_owned(),
+        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_owned(),
+        platform: "Linux".to_owned(),
     };
 
     match checkout_with_tap(&signer, params).await {
@@ -87,14 +88,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 2: Localhost URL (security restriction)
     println!("\nExample 2: Testing localhost URL (should fail)");
     let params = CheckoutParams {
-        merchant_url: "https://localhost:8080/checkout".to_string(),
-        consumer_id: "user-123".to_string(),
-        intent: "payment".to_string(),
-        country_code: "US".to_string(),
-        zip: "94103".to_string(),
-        ip_address: "192.168.1.100".to_string(),
-        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_string(),
-        platform: "Linux".to_string(),
+        merchant_url: "https://localhost:8080/checkout".to_owned(),
+        consumer_id: "user-123".to_owned(),
+        intent: "payment".to_owned(),
+        country_code: "US".to_owned(),
+        zip: "94103".to_owned(),
+        ip_address: "192.168.1.100".to_owned(),
+        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_owned(),
+        platform: "Linux".to_owned(),
     };
 
     match checkout_with_tap(&signer, params).await {
@@ -109,14 +110,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 3: Network timeout (unreachable host)
     println!("\nExample 3: Testing unreachable host (network timeout)");
     let params = CheckoutParams {
-        merchant_url: "https://merchant.example.com/checkout".to_string(),
-        consumer_id: "user-123".to_string(),
-        intent: "payment".to_string(),
-        country_code: "US".to_string(),
-        zip: "94103".to_string(),
-        ip_address: "192.168.1.100".to_string(),
-        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_string(),
-        platform: "Linux".to_string(),
+        merchant_url: "https://merchant.example.com/checkout".to_owned(),
+        consumer_id: "user-123".to_owned(),
+        intent: "payment".to_owned(),
+        country_code: "US".to_owned(),
+        zip: "94103".to_owned(),
+        ip_address: "192.168.1.100".to_owned(),
+        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_owned(),
+        platform: "Linux".to_owned(),
     };
 
     match checkout_with_tap(&signer, params).await {
@@ -143,14 +144,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 4: Comprehensive error matching
     println!("\nExample 4: Comprehensive error pattern matching");
     let result = checkout_with_tap(&signer, CheckoutParams {
-        merchant_url: "https://merchant.example.com/api/checkout".to_string(),
-        consumer_id: "user-789".to_string(),
-        intent: "browsing".to_string(),
-        country_code: "US".to_string(),
-        zip: "94103".to_string(),
-        ip_address: "192.168.1.100".to_string(),
-        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_string(),
-        platform: "Linux".to_string(),
+        merchant_url: "https://merchant.example.com/api/checkout".to_owned(),
+        consumer_id: "user-789".to_owned(),
+        intent: "browsing".to_owned(),
+        country_code: "US".to_owned(),
+        zip: "94103".to_owned(),
+        ip_address: "192.168.1.100".to_owned(),
+        user_agent: "Mozilla/5.0 (X11; Linux x86_64)".to_owned(),
+        platform: "Linux".to_owned(),
     })
     .await;
 
@@ -222,7 +223,7 @@ fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, Br
         }
 
         Err(BridgeError::RequestTooOld(time)) => {
-            eprintln!("   ✗ Request too old: {:?}", time);
+            eprintln!("   ✗ Request too old: {time:?}");
             eprintln!("   → Fix: Check system clock synchronization");
             eprintln!("   → Fix: Ensure request is sent immediately after signing");
         }
