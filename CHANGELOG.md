@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-11-20
+
+### Added
+
+#### TapVerifier Implementation
+
+- `TapVerifier` for RFC 9421 HTTP Message Signatures verification
+- Replay attack prevention using LRU-based nonce cache with 8-minute window
+- Property-based testing with `proptest` for signature verification
+- Clock skew tolerance (60 seconds) per RFC 9421 Section 2.3
+- Comprehensive test coverage for verification logic (128 tests passing)
+
+#### New Dependencies
+
+- `lru` 0.16 - LRU cache for efficient replay protection
+- `proptest` 1.9 - Property-based testing framework (dev dependency)
+
+### Changed
+
+#### Code Quality & Maintainability
+
+- Extracted `TAP_MAX_VALIDITY_WINDOW_SECS` constant (480 seconds) for consistency
+- Extracted `CLOCK_SKEW_TOLERANCE_SECS` constant (60 seconds) for RFC compliance
+- Changed `build_signature_base` visibility to `pub(crate)` to keep API surface minimal
+- Improved `Cargo.toml` formatting and dependency documentation
+
+### Fixed
+
+#### Security & Reliability
+
+- Smart nonce cache eviction: expired nonces are now properly removed
+- Prevents unbounded memory growth from stale cache entries
+- Clock drift handling prevents false rejections due to time differences
+- Fixed `clippy::string_slice` warning with safe UTF-8 string handling
+
+### Documentation
+
+- Added comprehensive API documentation for `TapVerifier`
+- Documented replay protection strategy and clock skew tolerance
+- Added examples for signature verification workflow
+- Security considerations for production deployments
+
 ## [0.1.0] - 2025-11-18
 
 ### Added
