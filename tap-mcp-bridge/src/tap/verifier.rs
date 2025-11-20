@@ -35,15 +35,16 @@ impl TapVerifier {
     ///
     /// # Arguments
     ///
-    /// * `capacity` - Maximum number of nonces to store for replay protection.
-    ///   Recommended: 10,000+ for high-traffic services.
+    /// * `capacity` - Maximum number of nonces to store for replay protection. Recommended: 10,000+
+    ///   for high-traffic services.
     ///
     /// # Panics
     ///
     /// Panics if the default capacity (1000) is invalid (should never happen).
     #[must_use]
     pub fn new(capacity: usize) -> Self {
-        let cap = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(1000).expect("1000 is non-zero"));
+        let cap = NonZeroUsize::new(capacity)
+            .unwrap_or(NonZeroUsize::new(1000).expect("1000 is non-zero"));
         Self { nonce_cache: Arc::new(Mutex::new(LruCache::new(cap))) }
     }
 
@@ -63,7 +64,10 @@ impl TapVerifier {
     ///
     /// Returns error if verification fails for any reason (invalid signature,
     /// expired, replay detected, etc.).
-    #[allow(clippy::too_many_arguments, reason = "RFC 9421 verification requires many parameters")]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "RFC 9421 verification requires many parameters"
+    )]
     #[instrument(skip(self, body, verifying_key), fields(method, authority, path))]
     pub fn verify_request(
         &self,
@@ -76,7 +80,8 @@ impl TapVerifier {
         verifying_key: &VerifyingKey,
     ) -> Result<()> {
         // 1. Parse Signature-Input
-        // Format: sig1=("@method" "@authority" "@path" "content-digest");created=...;expires=...;nonce=...;tag=...
+        // Format: sig1=("@method" "@authority" "@path"
+        // "content-digest");created=...;expires=...;nonce=...;tag=...
         let input = signature_input_header.trim();
         if !input.starts_with("sig1=(") {
             return Err(BridgeError::CryptoError(
@@ -85,9 +90,10 @@ impl TapVerifier {
         }
 
         // Extract parameters
-        let params_str = input.split(')').nth(1).ok_or_else(|| {
-            BridgeError::CryptoError("Invalid Signature-Input format".to_owned())
-        })?;
+        let params_str = input
+            .split(')')
+            .nth(1)
+            .ok_or_else(|| BridgeError::CryptoError("Invalid Signature-Input format".to_owned()))?;
 
         let created = Self::extract_param(params_str, "created")?
             .parse::<u64>()
