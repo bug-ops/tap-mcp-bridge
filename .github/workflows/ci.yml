@@ -1,3 +1,4 @@
+---
 name: CI
 
 on:
@@ -16,6 +17,7 @@ env:
   RUST_BACKTRACE: short
   RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
+  RUST_VERSION: "1.91.1"
 
 # Cancel previous runs on new push
 concurrency:
@@ -241,11 +243,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Edition 2024 requires Rust 1.82+
-      - name: Install Rust 1.82
-        uses: dtolnay/rust-toolchain@master
+      - name: Install Rust ${RUST_VERSION}
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.82"
+          toolchain: "${{ env.RUST_VERSION }}"
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
@@ -290,10 +291,35 @@ jobs:
           ls -lh target/release/
           du -sh target/release/
 
+  # Docker build check
+  docker:
+    name: Docker Build
+    needs: [check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: tap-mcp-server:test
+          build-args: |
+            RUST_VERSION=${{ env.RUST_VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # All checks passed
   ci-success:
     name: CI Success
-    needs: [check, security, test, dependencies, feature-testing, msrv]
+    needs: [check, security, test, dependencies, feature-testing, msrv, docker]
     runs-on: ubuntu-latest
     if: always()
     permissions: {}
@@ -305,7 +331,8 @@ jobs:
              [[ "${{ needs.test.result }}" != "success" ]] || \
              [[ "${{ needs.dependencies.result }}" != "success" ]] || \
              [[ "${{ needs.feature-testing.result }}" != "success" ]] || \
-             [[ "${{ needs.msrv.result }}" != "success" ]]; then
+             [[ "${{ needs.msrv.result }}" != "success" ]] || \
+             [[ "${{ needs.docker.result }}" != "success" ]]; then
             echo "One or more jobs failed"
             exit 1
           fi

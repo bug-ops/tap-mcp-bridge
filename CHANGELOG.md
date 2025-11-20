@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Core TAP Protocol Implementation
+
 - RFC 9421 HTTP Message Signatures with Ed25519
 - JWK Thumbprints per RFC 7638
 - Content-Digest computation per RFC 9530
@@ -20,23 +21,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replay protection via UUID v4 nonce
 
 #### MCP Integration
+
 - MCP tools: `checkout_with_tap`, `browse_merchant`, `verify_agent_identity`
 - JSON-RPC 2.0 protocol support
 - Stdio transport for MCP clients
 
 #### MCP Server Binary (`tap-mcp-server`)
+
 - Standalone binary for AI agent integration
 - Environment-based configuration (TAP_AGENT_ID, TAP_AGENT_DIRECTORY, TAP_SIGNING_KEY)
 - Graceful shutdown (SIGINT/SIGTERM)
 - Comprehensive input validation with clear error messages
 
 #### Observability (Phase 7)
+
 - Structured logging (JSON and Pretty formats)
 - Health check system via `verify_agent_identity` tool
 - Request instrumentation with `#[instrument]` macros
 - Log format configuration via LOG_FORMAT environment variable
 
 #### Security
+
 - Custom `Debug` implementations for payment data (PCI-DSS compliance)
 - PAN masking (show only last 4 digits)
 - CVV complete redaction
@@ -45,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow permissions (principle of least privilege)
 
 #### Documentation
+
 - Comprehensive README with Quick Start guide
 - TAP Specification guide (`docs/TAP_SPECIFICATION.md`)
 - MCP Integration guide (`docs/MCP_INTEGRATION.md`)
@@ -52,12 +58,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API documentation with examples
 
 #### Testing
+
 - 124 automated tests (unit, integration, binary configuration)
 - 51 documentation tests
 - Performance benchmarks with Criterion
 - RFC test vectors validation (RFC 7638)
 
 #### Development Infrastructure
+
 - Cargo workspace structure (library + binary)
 - cargo-make tasks for development workflow
 - cargo-deny for security and license compliance
@@ -82,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
+
 - Phase 8: Reliability Patterns (retry, circuit breaker)
 - Phase 9: Security Hardening
 - Phase 10: Performance Optimization

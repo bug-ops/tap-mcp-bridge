@@ -40,3 +40,6 @@ Thumbs.db
 
 # Local development files
 .local/
+
+.gemini/
+gha-creds-*.json
