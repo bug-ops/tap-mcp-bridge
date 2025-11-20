@@ -2,10 +2,11 @@
 
 **Production-ready Rust library and MCP server** for Visa's Trusted Agent Protocol (TAP), enabling AI agents to securely authenticate with merchants and execute payment transactions.
 
+[![Crates.io](https://img.shields.io/crates/v/tap-mcp-bridge.svg)](https://crates.io/crates/tap-mcp-bridge)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org)
 [![TAP Compliance](https://img.shields.io/badge/TAP%20compliance-100%25-brightgreen.svg)](docs/TAP_SPECIFICATION.md)
-[![Tests](https://img.shields.io/badge/tests-122%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-128%20passing-brightgreen.svg)](#testing)
 [![Workspace](https://img.shields.io/badge/workspace-library%20%2B%20binary-blue.svg)](#project-structure)
 
 ---
@@ -44,7 +45,7 @@ The TAP-MCP Bridge acts as a **protocol adapter**, translating between:
 | Metric | Status |
 |--------|--------|
 | **TAP Compliance** | 100% (18/18 requirements) |
-| **Test Coverage** | 122 tests passing (104 unit + 18 binary) |
+| **Test Coverage** | 128 tests passing (110 unit + 18 binary) |
 | **Security** | PCI-DSS compliant, RFC 7516 JWE encryption |
 | **Code Quality** | 0 warnings, Microsoft Rust Guidelines compliant |
 | **Platform Support** | macOS, Linux, Windows |
