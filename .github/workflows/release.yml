@@ -34,9 +34,10 @@ jobs:
 
       - name: Verify tag matches Cargo.toml version
         run: |
-          CARGO_VERSION=$(grep -m1 '^version = ' tap-mcp-bridge/Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          # Get version from workspace.package in root Cargo.toml
+          CARGO_VERSION=$(grep -A5 '\[workspace.package\]' Cargo.toml | grep '^version' | sed 's/.*"\(.*\)".*/\1/')
           TAG_VERSION="${{ steps.version.outputs.tag_version }}"
-          echo "Cargo.toml version: $CARGO_VERSION"
+          echo "Workspace version: $CARGO_VERSION"
           echo "Git tag version: $TAG_VERSION"
           if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
             echo "Error: Version mismatch!"
