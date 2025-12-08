@@ -1,0 +1,48 @@
+---
+name: Miri
+
+on:
+  schedule:
+    # Weekly on Sunday at 2:00 UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  miri:
+    name: Miri (Unsafe Code Validation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust nightly with Miri
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "miri"
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Setup Miri
+        run: cargo miri setup
+
+      - name: Run Miri tests
+        run: cargo miri nextest run -j6 --no-fail-fast
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation"
