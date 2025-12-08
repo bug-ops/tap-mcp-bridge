@@ -112,21 +112,6 @@ jobs:
       # Note: Using rustls for reqwest, so no OpenSSL needed
       # josekit uses vendored OpenSSL which compiles from source
 
-      - name: Setup sccache (Unix)
-        if: matrix.os != 'windows-latest'
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Setup sccache (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: mozilla-actions/sccache-action@v0.0.9
-        with:
-          version: "v0.7.4"
-
-      - name: Configure sccache
-        run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
@@ -146,9 +131,6 @@ jobs:
 
       - name: Run doctests
         run: cargo test --doc --all-features
-
-      - name: sccache stats
-        run: sccache --show-stats
 
   # Dependency verification
   dependencies:
@@ -269,14 +251,6 @@ jobs:
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Configure sccache
-        run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
