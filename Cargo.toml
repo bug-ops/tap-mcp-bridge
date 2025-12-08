@@ -6,74 +6,51 @@ members = ["tap-mcp-bridge", "tap-mcp-server"]
 edition = "2024"
 authors = ["Andrei G. <andrei.g@my.com>"]
 license = "MIT OR Apache-2.0"
+version = "0.1.1"
 repository = "https://github.com/bug-ops/tap-mcp-bridge"
 
 [workspace.dependencies]
-# MCP Protocol
-rmcp = "0.10"
-
-# Cryptography (TAP signatures) - trait-based API
-signature = "2.2"
-ed25519-dalek = "2.2"
-sha2 = "0.10"
+anyhow = "1"
 base64 = "0.22"
-uuid = { version = "1.19", features = ["v4"] }
+criterion = { version = "0.8", features = ["html_reports"] }
+ed25519-dalek = "2"
 hex = "0.4"
-zeroize = "1.8"
-
-# HTTP Client (using rustls to avoid OpenSSL on Windows)
+josekit = { version = "0.10", features = ["vendored"] }
+jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
+lru = "0.16"
+proptest = "1"
 reqwest = { version = "0.12", default-features = false, features = [
+    "http2",
     "json",
     "rustls-tls",
-    "http2",
 ] }
-url = "2.5"
-
-# Async Runtime
-tokio = { version = "1.48", features = ["rt", "rt-multi-thread", "macros"] }
-
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# Error Handling
-thiserror = "2.0"
-anyhow = "1.0"
-
-# Logging
+rmcp = "0.10"
+secrecy = { version = "0.10", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+signature = "2"
+tap-mcp-bridge = { version = "0.1.1", path = "tap-mcp-bridge" }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+url = "2"
+uuid = { version = "1.19", features = ["v4"] }
+zeroize = "1"
 
-# JWT/JWK support for TAP (aws_lc_rs backend for better performance)
-jsonwebtoken = { version = "10.2", features = ["aws_lc_rs"] }
-
-# JWE encryption for APC (RFC 7516) - vendored OpenSSL for Windows compatibility
-josekit = { version = "0.10", features = ["vendored"] }
-
-# Sensitive data handling for ACRO/APC
-secrecy = { version = "0.10", features = ["serde"] }
-
-# Replay protection
-lru = "0.16"
-
-# Property-based testing
-proptest = "1.9"
-
-# Linting configuration following Microsoft Rust Guidelines
 [workspace.lints.rust]
-# Compiler lints
 ambiguous_negative_literals = "warn"
 missing_debug_implementations = "warn"
+missing_docs = "warn"
 redundant_imports = "warn"
 redundant_lifetimes = "warn"
 trivial_numeric_casts = "warn"
 unsafe_op_in_unsafe_fn = "warn"
 unused_lifetimes = "warn"
 unused_qualifications = "warn"
-missing_docs = "warn"
 
 [workspace.lints.clippy]
-# Enable all major lint categories
 cargo = { level = "warn", priority = -1 }
 complexity = { level = "warn", priority = -1 }
 correctness = { level = "warn", priority = -1 }
@@ -82,7 +59,6 @@ perf = { level = "warn", priority = -1 }
 style = { level = "warn", priority = -1 }
 suspicious = { level = "warn", priority = -1 }
 
-# Restriction lints for code quality
 allow_attributes_without_reason = "warn"
 as_underscore = "warn"
 clone_on_ref_ptr = "warn"
@@ -103,6 +79,7 @@ let_underscore_must_use = "warn"
 lossy_float_literal = "warn"
 mem_forget = "warn"
 mixed_read_write_in_expression = "warn"
+module_name_repetitions = "allow"
 mutex_atomic = "warn"
 needless_raw_strings = "warn"
 panic = "warn"
@@ -113,6 +90,7 @@ rc_mutex = "warn"
 rest_pat_in_fully_bound_structs = "warn"
 same_name_method = "warn"
 semicolon_outside_block = "warn"
+similar_names = "allow"
 str_to_string = "warn"
 string_add = "warn"
 string_slice = "warn"
@@ -127,16 +105,10 @@ unwrap_used = "warn"
 use_debug = "warn"
 verbose_file_reads = "warn"
 
-# Specific overrides for common patterns
-module_name_repetitions = "allow"
-similar_names = "allow"
-
-# Profile for benchmarks with debug symbols for profiling
 [profile.bench]
 debug = 1
 
-# Release profile optimizations
 [profile.release]
-lto = true
 codegen-units = 1
+lto = true
 strip = true
