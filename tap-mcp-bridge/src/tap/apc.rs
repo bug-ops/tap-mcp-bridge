@@ -1008,6 +1008,7 @@ mwIDAQAB
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Miri can't run OpenSSL FFI calls
     fn test_payment_method_card_encryption() {
         let card = CardData {
             number: "4111111111111111".to_owned(),
@@ -1028,6 +1029,7 @@ mwIDAQAB
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Miri can't run OpenSSL FFI calls
     fn test_payment_method_bank_account_encryption() {
         let account = BankAccountData {
             account_number: "1234567890".to_owned(),
@@ -1046,6 +1048,7 @@ mwIDAQAB
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Miri can't run OpenSSL FFI calls
     fn test_payment_method_digital_wallet_encryption() {
         let wallet = DigitalWalletData {
             wallet_type: "apple_pay".to_owned(),
