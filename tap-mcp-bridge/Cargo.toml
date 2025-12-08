@@ -20,50 +20,29 @@ normal = [
 ]
 
 [dependencies]
-# MCP Protocol
-rmcp.workspace = true
-
-# Cryptography (TAP signatures) - trait-based API
-signature.workspace = true
-ed25519-dalek.workspace = true
-sha2.workspace = true
 base64.workspace = true
-uuid.workspace = true
+ed25519-dalek.workspace = true
 hex.workspace = true
-zeroize.workspace = true
-
-# HTTP Client (using rustls to avoid OpenSSL on Windows)
+josekit.workspace = true
+jsonwebtoken.workspace = true
+lru.workspace = true
 reqwest.workspace = true
-url.workspace = true
-
-# Async Runtime (minimal features for library)
-tokio.workspace = true
-
-# Serialization
+rmcp.workspace = true
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-
-# Error Handling
+sha2.workspace = true
+signature.workspace = true
 thiserror.workspace = true
-
-# Logging (basic only)
+tokio.workspace = true
 tracing.workspace = true
-
-# JWT/JWK support for TAP (aws_lc_rs backend for better performance)
-jsonwebtoken.workspace = true
-
-# JWE encryption for APC (RFC 7516) - vendored OpenSSL for Windows compatibility
-josekit.workspace = true
-
-# Sensitive data handling for ACRO/APC
-secrecy.workspace = true
-
-# Replay protection
-lru.workspace = true
+url.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
 proptest.workspace = true
-criterion = { version = "0.7", features = ["html_reports"] }
 tokio = { workspace = true, features = ["time"] }
 tracing-subscriber.workspace = true
 
