@@ -1,0 +1,76 @@
+# Labeler configuration for tap-mcp-bridge project
+# Automatically applies labels to pull requests based on changed files
+
+# Library crate
+lib:
+  - changed-files:
+    - any-glob-to-any-file: 'tap-mcp-bridge/**/*'
+
+# Binary crate
+bin:
+  - changed-files:
+    - any-glob-to-any-file: 'tap-mcp-server/**/*'
+
+# TAP protocol implementation
+tap:
+  - changed-files:
+    - any-glob-to-any-file: 'tap-mcp-bridge/src/tap/**/*'
+
+# MCP integration
+mcp:
+  - changed-files:
+    - any-glob-to-any-file: 'tap-mcp-bridge/src/mcp/**/*'
+
+# CI/CD configuration
+ci:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/workflows/**/*'
+      - '.github/dependabot.yml'
+      - '.github/labeler.yml'
+      - 'Dockerfile'
+      - 'deny.toml'
+      - 'clippy.toml'
+      - 'rustfmt.toml'
+      - 'rust-toolchain.toml'
+      - 'Makefile.toml'
+
+# Documentation
+docs:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - 'docs/**/*'
+
+# Dependencies
+deps:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/Cargo.toml'
+      - 'Cargo.lock'
+
+# Tests
+test:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/tests/**/*'
+
+# Examples
+example:
+  - changed-files:
+    - any-glob-to-any-file: '**/examples/**/*'
+
+# Benchmarks
+bench:
+  - changed-files:
+    - any-glob-to-any-file: '**/benches/**/*'
+
+# Security-critical code
+security:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'deny.toml'
+      - '**/signer.rs'
+      - '**/jwk.rs'
+      - '**/jwt.rs'
+      - '**/apc.rs'
