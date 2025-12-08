@@ -6,7 +6,7 @@ members = ["tap-mcp-bridge", "tap-mcp-server"]
 edition = "2024"
 authors = ["Andrei G. <andrei.g@my.com>"]
 license = "MIT OR Apache-2.0"
-version = "0.1.1"
+version = "0.1.2"
 repository = "https://github.com/bug-ops/tap-mcp-bridge"
 
 [workspace.dependencies]
@@ -30,7 +30,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 signature = "2"
-tap-mcp-bridge = { version = "0.1.1", path = "tap-mcp-bridge" }
+tap-mcp-bridge = { version = "0.1.2", path = "tap-mcp-bridge" }
+tap-mcp-server = { version = "0.1.2", path = "tap-mcp-server" }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
 tracing = "0.1"

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-12-08
+
+### Changed
+
+#### Dependencies
+
+- Upgraded `rmcp` from 0.9.0 to 0.10.0
+- Upgraded `criterion` from 0.7 to 0.8
+- Upgraded `uuid` from 1.18 to 1.19
+- Bumped security updates across 17 dependencies
+- Centralized all dependency versions in workspace `Cargo.toml`
+- Sorted dependencies alphabetically for better maintainability
+
+#### CI/CD
+
+- Added GitHub Actions labeler for automatic PR labeling
+- Added release workflow for automated crates.io publishing on version tags
+- Moved Miri to separate weekly workflow (reduces CI time)
+- Upgraded `actions/checkout` from v5 to v6
+- Upgraded `docker/build-push-action` from v5 to v6
+- Removed sccache, simplified to Swatinem/rust-cache only
+- Use nextest for Miri with 6 parallel jobs
+
+#### Testing
+
+- Skip OpenSSL-dependent tests under Miri (FFI limitation)
+
 ## [0.1.1] - 2025-11-20
 
 ### Added
@@ -139,5 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.1.2]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.1.2
+[0.1.1]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.1.1
 [0.1.0]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.1.0
-[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.1.2...HEAD
