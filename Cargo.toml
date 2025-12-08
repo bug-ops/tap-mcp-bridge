@@ -10,7 +10,7 @@ repository = "https://github.com/bug-ops/tap-mcp-bridge"
 
 [workspace.dependencies]
 # MCP Protocol
-rmcp = "0.9"
+rmcp = "0.10"
 
 # Cryptography (TAP signatures) - trait-based API
 signature = "2.2"
