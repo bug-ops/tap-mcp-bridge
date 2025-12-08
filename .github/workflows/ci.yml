@@ -217,6 +217,8 @@ jobs:
 
       - name: Run Miri tests
         run: cargo miri nextest run -j6 --no-fail-fast
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation"
         continue-on-error: true
 
   # MSRV check (if specified in Cargo.toml)
