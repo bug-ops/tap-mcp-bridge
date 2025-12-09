@@ -193,6 +193,33 @@ pub enum BridgeError {
     /// This error occurs when the request timestamp is outside the allowed window.
     #[error("Request too old (timestamp: {0:?})")]
     RequestTooOld(std::time::SystemTime),
+
+    /// Rate limit exceeded.
+    ///
+    /// This error occurs when too many requests are made in a short period.
+    /// Rate limiting protects against `DoS` attacks and ensures fair resource usage.
+    ///
+    /// # Recovery
+    ///
+    /// Wait a short period (e.g., 1 second) and retry the request.
+    /// Consider implementing exponential backoff for repeated failures.
+    #[error("Rate limit exceeded, try again later")]
+    RateLimitExceeded,
+
+    /// Circuit breaker is open.
+    ///
+    /// This error occurs when the circuit breaker has detected too many failures
+    /// and is temporarily rejecting all requests to prevent cascading failures.
+    /// The circuit will automatically transition to half-open state after the
+    /// reset timeout expires.
+    ///
+    /// # Recovery
+    ///
+    /// Wait for the circuit breaker's reset timeout to expire (typically 60 seconds).
+    /// The circuit will then allow limited test requests to determine if the
+    /// underlying service has recovered.
+    #[error("Circuit breaker is open")]
+    CircuitOpen,
 }
 
 #[cfg(test)]

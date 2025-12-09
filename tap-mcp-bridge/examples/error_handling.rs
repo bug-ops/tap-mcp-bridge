@@ -227,5 +227,17 @@ fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, Br
             eprintln!("   → Fix: Check system clock synchronization");
             eprintln!("   → Fix: Ensure request is sent immediately after signing");
         }
+
+        Err(BridgeError::RateLimitExceeded) => {
+            eprintln!("   ✗ Rate limit exceeded");
+            eprintln!("   → Fix: Reduce request frequency");
+            eprintln!("   → Fix: Wait before retrying");
+        }
+
+        Err(BridgeError::CircuitOpen) => {
+            eprintln!("   ✗ Circuit breaker is open");
+            eprintln!("   → Fix: Wait for circuit breaker to recover");
+            eprintln!("   → Fix: Check merchant availability");
+        }
     }
 }

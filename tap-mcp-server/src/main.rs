@@ -367,6 +367,7 @@ impl TapMcpServer {
             agent_id: self.agent_id.to_string(),
             uptime_secs,
             checks,
+            metrics: None, // TODO: Add metrics collection in future implementation
         };
 
         let json = report.to_json().map_err(|e| {

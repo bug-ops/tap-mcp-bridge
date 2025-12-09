@@ -1,9 +1,15 @@
 //! Observability infrastructure for TAP-MCP server.
 //!
-//! Provides structured logging, request correlation, and health checks for
-//! production deployments.
+//! Provides structured logging, request correlation, health checks, and metrics
+//! for production deployments.
 
-use std::io;
+// Allow dead code for Metrics which is prepared for future integration
+#![allow(dead_code, reason = "Metrics struct prepared for future integration")]
+
+use std::{
+    io,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use tracing_subscriber::{
     EnvFilter,
@@ -204,6 +210,8 @@ pub struct HealthReport {
     pub uptime_secs: u64,
     /// Individual health checks.
     pub checks: Vec<HealthCheck>,
+    /// Optional metrics snapshot.
+    pub metrics: Option<MetricsSnapshot>,
 }
 
 impl HealthReport {
@@ -213,7 +221,7 @@ impl HealthReport {
     ///
     /// Returns error if JSON serialization fails.
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        let json = serde_json::json!({
+        let mut json = serde_json::json!({
             "status": self.status.as_str(),
             "version": self.version,
             "agent_id": self.agent_id,
@@ -230,6 +238,17 @@ impl HealthReport {
             }).collect::<Vec<_>>(),
         });
 
+        if let Some(ref metrics) = self.metrics {
+            json["metrics"] = serde_json::json!({
+                "checkout_requests": metrics.checkout_requests,
+                "checkout_successes": metrics.checkout_successes,
+                "checkout_failures": metrics.checkout_failures,
+                "browse_requests": metrics.browse_requests,
+                "signature_generations": metrics.signature_generations,
+                "http_errors": metrics.http_errors,
+            });
+        }
+
         serde_json::to_string_pretty(&json)
     }
 
@@ -244,6 +263,167 @@ impl HealthReport {
             HealthStatus::Healthy
         }
     }
+}
+
+/// Metrics collector for TAP-MCP Bridge operations.
+///
+/// Thread-safe metrics collection using atomic counters. All operations use
+/// `Ordering::Relaxed` as exact ordering is not required for statistical counters.
+///
+/// # Examples
+///
+/// ```
+/// use tap_mcp_server::observability::Metrics;
+///
+/// let metrics = Metrics::default();
+///
+/// // Record successful checkout
+/// metrics.record_checkout_success();
+///
+/// // Record failed checkout
+/// metrics.record_checkout_failure();
+///
+/// // Get snapshot for reporting
+/// let snapshot = metrics.snapshot();
+/// assert_eq!(snapshot.checkout_requests, 2);
+/// assert_eq!(snapshot.checkout_successes, 1);
+/// assert_eq!(snapshot.checkout_failures, 1);
+/// ```
+#[derive(Debug, Default)]
+pub struct Metrics {
+    /// Total checkout requests initiated.
+    pub checkout_requests: AtomicU64,
+    /// Successful checkout completions.
+    pub checkout_successes: AtomicU64,
+    /// Failed checkout attempts.
+    pub checkout_failures: AtomicU64,
+    /// Total browse requests.
+    pub browse_requests: AtomicU64,
+    /// Total signature generations.
+    pub signature_generations: AtomicU64,
+    /// HTTP errors encountered.
+    pub http_errors: AtomicU64,
+}
+
+impl Metrics {
+    /// Records a successful checkout operation.
+    ///
+    /// Increments both total checkout requests and success counter.
+    pub fn record_checkout_success(&self) {
+        self.checkout_requests.fetch_add(1, Ordering::Relaxed);
+        self.checkout_successes.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Records a failed checkout operation.
+    ///
+    /// Increments both total checkout requests and failure counter.
+    pub fn record_checkout_failure(&self) {
+        self.checkout_requests.fetch_add(1, Ordering::Relaxed);
+        self.checkout_failures.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Records a browse operation.
+    pub fn record_browse(&self) {
+        self.browse_requests.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Records a signature generation operation.
+    pub fn record_signature_generation(&self) {
+        self.signature_generations.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Records an HTTP error.
+    pub fn record_http_error(&self) {
+        self.http_errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Creates a point-in-time snapshot of all metrics.
+    ///
+    /// Returns owned copy of current metric values for serialization or reporting.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tap_mcp_server::observability::Metrics;
+    ///
+    /// let metrics = Metrics::default();
+    /// metrics.record_checkout_success();
+    ///
+    /// let snapshot = metrics.snapshot();
+    /// println!("Total checkouts: {}", snapshot.checkout_requests);
+    /// ```
+    #[must_use]
+    pub fn snapshot(&self) -> MetricsSnapshot {
+        MetricsSnapshot {
+            checkout_requests: self.checkout_requests.load(Ordering::Relaxed),
+            checkout_successes: self.checkout_successes.load(Ordering::Relaxed),
+            checkout_failures: self.checkout_failures.load(Ordering::Relaxed),
+            browse_requests: self.browse_requests.load(Ordering::Relaxed),
+            signature_generations: self.signature_generations.load(Ordering::Relaxed),
+            http_errors: self.http_errors.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Exports metrics in Prometheus text format.
+    ///
+    /// Returns metrics formatted according to Prometheus exposition format
+    /// specification for scraping by monitoring systems.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tap_mcp_server::observability::Metrics;
+    ///
+    /// let metrics = Metrics::default();
+    /// metrics.record_checkout_success();
+    ///
+    /// let prometheus = metrics.to_prometheus();
+    /// assert!(prometheus.contains("tap_checkout_requests_total 1"));
+    /// ```
+    #[must_use]
+    pub fn to_prometheus(&self) -> String {
+        let snapshot = self.snapshot();
+
+        format!(
+            "# HELP tap_checkout_requests_total Total checkout requests\n# TYPE \
+             tap_checkout_requests_total counter\ntap_checkout_requests_total {}\n# HELP \
+             tap_checkout_successes_total Successful checkouts\n# TYPE \
+             tap_checkout_successes_total counter\ntap_checkout_successes_total {}\n# HELP \
+             tap_checkout_failures_total Failed checkouts\n# TYPE tap_checkout_failures_total \
+             counter\ntap_checkout_failures_total {}\n# HELP tap_browse_requests_total Total \
+             browse requests\n# TYPE tap_browse_requests_total counter\ntap_browse_requests_total \
+             {}\n# HELP tap_signature_generations_total Total signature generations\n# TYPE \
+             tap_signature_generations_total counter\ntap_signature_generations_total {}\n# HELP \
+             tap_http_errors_total HTTP errors encountered\n# TYPE tap_http_errors_total \
+             counter\ntap_http_errors_total {}\n",
+            snapshot.checkout_requests,
+            snapshot.checkout_successes,
+            snapshot.checkout_failures,
+            snapshot.browse_requests,
+            snapshot.signature_generations,
+            snapshot.http_errors,
+        )
+    }
+}
+
+/// Point-in-time snapshot of metrics values.
+///
+/// Contains owned copies of metric values at snapshot time. Safe to serialize
+/// and send across threads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetricsSnapshot {
+    /// Total checkout requests.
+    pub checkout_requests: u64,
+    /// Successful checkouts.
+    pub checkout_successes: u64,
+    /// Failed checkouts.
+    pub checkout_failures: u64,
+    /// Total browse requests.
+    pub browse_requests: u64,
+    /// Total signature generations.
+    pub signature_generations: u64,
+    /// HTTP errors.
+    pub http_errors: u64,
 }
 
 #[cfg(test)]
@@ -349,6 +529,7 @@ mod tests {
                 HealthCheck::pass("signing_key"),
                 HealthCheck::pass_with_message("jwks_generation", "JWKS generated successfully"),
             ],
+            metrics: None,
         };
 
         let json = report.to_json().expect("JSON serialization should succeed");
@@ -371,6 +552,7 @@ mod tests {
                 HealthCheck::fail("signing_key", "Key not loaded"),
                 HealthCheck::warn("directory", "Directory not reachable"),
             ],
+            metrics: None,
         };
 
         let json = report.to_json().expect("JSON serialization should succeed");
@@ -392,5 +574,230 @@ mod tests {
         assert_eq!(HealthStatus::Healthy.as_str(), "healthy");
         assert_eq!(HealthStatus::Degraded.as_str(), "degraded");
         assert_eq!(HealthStatus::Unhealthy.as_str(), "unhealthy");
+    }
+
+    #[test]
+    fn test_metrics_default() {
+        let metrics = Metrics::default();
+        let snapshot = metrics.snapshot();
+
+        assert_eq!(snapshot.checkout_requests, 0);
+        assert_eq!(snapshot.checkout_successes, 0);
+        assert_eq!(snapshot.checkout_failures, 0);
+        assert_eq!(snapshot.browse_requests, 0);
+        assert_eq!(snapshot.signature_generations, 0);
+        assert_eq!(snapshot.http_errors, 0);
+    }
+
+    #[test]
+    fn test_metrics_record_checkout_success() {
+        let metrics = Metrics::default();
+
+        metrics.record_checkout_success();
+        metrics.record_checkout_success();
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.checkout_requests, 2);
+        assert_eq!(snapshot.checkout_successes, 2);
+        assert_eq!(snapshot.checkout_failures, 0);
+    }
+
+    #[test]
+    fn test_metrics_record_checkout_failure() {
+        let metrics = Metrics::default();
+
+        metrics.record_checkout_failure();
+        metrics.record_checkout_failure();
+        metrics.record_checkout_failure();
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.checkout_requests, 3);
+        assert_eq!(snapshot.checkout_successes, 0);
+        assert_eq!(snapshot.checkout_failures, 3);
+    }
+
+    #[test]
+    fn test_metrics_record_checkout_mixed() {
+        let metrics = Metrics::default();
+
+        metrics.record_checkout_success();
+        metrics.record_checkout_failure();
+        metrics.record_checkout_success();
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.checkout_requests, 3);
+        assert_eq!(snapshot.checkout_successes, 2);
+        assert_eq!(snapshot.checkout_failures, 1);
+    }
+
+    #[test]
+    fn test_metrics_record_browse() {
+        let metrics = Metrics::default();
+
+        metrics.record_browse();
+        metrics.record_browse();
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.browse_requests, 2);
+    }
+
+    #[test]
+    fn test_metrics_record_signature_generation() {
+        let metrics = Metrics::default();
+
+        metrics.record_signature_generation();
+        metrics.record_signature_generation();
+        metrics.record_signature_generation();
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.signature_generations, 3);
+    }
+
+    #[test]
+    fn test_metrics_record_http_error() {
+        let metrics = Metrics::default();
+
+        metrics.record_http_error();
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.http_errors, 1);
+    }
+
+    #[test]
+    fn test_metrics_snapshot_multiple_times() {
+        let metrics = Metrics::default();
+
+        metrics.record_checkout_success();
+        let snapshot1 = metrics.snapshot();
+
+        metrics.record_checkout_success();
+        let snapshot2 = metrics.snapshot();
+
+        assert_eq!(snapshot1.checkout_requests, 1);
+        assert_eq!(snapshot2.checkout_requests, 2);
+    }
+
+    #[test]
+    fn test_metrics_to_prometheus() {
+        let metrics = Metrics::default();
+
+        metrics.record_checkout_success();
+        metrics.record_checkout_failure();
+        metrics.record_browse();
+        metrics.record_signature_generation();
+        metrics.record_http_error();
+
+        let output = metrics.to_prometheus();
+
+        // Check format compliance
+        assert!(output.contains("# HELP tap_checkout_requests_total Total checkout requests"));
+        assert!(output.contains("# TYPE tap_checkout_requests_total counter"));
+        assert!(output.contains("tap_checkout_requests_total 2"));
+
+        assert!(output.contains("# HELP tap_checkout_successes_total Successful checkouts"));
+        assert!(output.contains("# TYPE tap_checkout_successes_total counter"));
+        assert!(output.contains("tap_checkout_successes_total 1"));
+
+        assert!(output.contains("# HELP tap_checkout_failures_total Failed checkouts"));
+        assert!(output.contains("# TYPE tap_checkout_failures_total counter"));
+        assert!(output.contains("tap_checkout_failures_total 1"));
+
+        assert!(output.contains("# HELP tap_browse_requests_total Total browse requests"));
+        assert!(output.contains("tap_browse_requests_total 1"));
+
+        assert!(
+            output.contains("# HELP tap_signature_generations_total Total signature generations")
+        );
+        assert!(output.contains("tap_signature_generations_total 1"));
+
+        assert!(output.contains("# HELP tap_http_errors_total HTTP errors encountered"));
+        assert!(output.contains("tap_http_errors_total 1"));
+    }
+
+    #[test]
+    fn test_metrics_to_prometheus_zero_values() {
+        let metrics = Metrics::default();
+        let output = metrics.to_prometheus();
+
+        assert!(output.contains("tap_checkout_requests_total 0"));
+        assert!(output.contains("tap_checkout_successes_total 0"));
+        assert!(output.contains("tap_checkout_failures_total 0"));
+        assert!(output.contains("tap_browse_requests_total 0"));
+        assert!(output.contains("tap_signature_generations_total 0"));
+        assert!(output.contains("tap_http_errors_total 0"));
+    }
+
+    #[test]
+    fn test_metrics_snapshot_equality() {
+        let snapshot1 = MetricsSnapshot {
+            checkout_requests: 10,
+            checkout_successes: 8,
+            checkout_failures: 2,
+            browse_requests: 5,
+            signature_generations: 15,
+            http_errors: 1,
+        };
+
+        let snapshot2 = MetricsSnapshot {
+            checkout_requests: 10,
+            checkout_successes: 8,
+            checkout_failures: 2,
+            browse_requests: 5,
+            signature_generations: 15,
+            http_errors: 1,
+        };
+
+        assert_eq!(snapshot1, snapshot2);
+    }
+
+    #[test]
+    fn test_metrics_snapshot_clone() {
+        let snapshot = MetricsSnapshot {
+            checkout_requests: 5,
+            checkout_successes: 3,
+            checkout_failures: 2,
+            browse_requests: 1,
+            signature_generations: 10,
+            http_errors: 0,
+        };
+
+        let cloned = snapshot.clone();
+        assert_eq!(snapshot, cloned);
+    }
+
+    #[test]
+    fn test_health_report_with_metrics() {
+        let metrics = Metrics::default();
+        metrics.record_checkout_success();
+        metrics.record_browse();
+
+        let report = HealthReport {
+            status: HealthStatus::Healthy,
+            version: "0.1.0".to_owned(),
+            agent_id: "agent-123".to_owned(),
+            uptime_secs: 3600,
+            checks: vec![HealthCheck::pass("test")],
+            metrics: Some(metrics.snapshot()),
+        };
+
+        let json = report.to_json().expect("JSON serialization should succeed");
+        assert!(json.contains("\"metrics\""));
+        assert!(json.contains("\"checkout_requests\": 1"));
+        assert!(json.contains("\"browse_requests\": 1"));
+    }
+
+    #[test]
+    fn test_health_report_without_metrics() {
+        let report = HealthReport {
+            status: HealthStatus::Healthy,
+            version: "0.1.0".to_owned(),
+            agent_id: "agent-123".to_owned(),
+            uptime_secs: 3600,
+            checks: vec![],
+            metrics: None,
+        };
+
+        let json = report.to_json().expect("JSON serialization should succeed");
+        assert!(!json.contains("\"metrics\""));
     }
 }

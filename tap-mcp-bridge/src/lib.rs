@@ -213,15 +213,19 @@
 //!
 //! **TAP Compliance**: 100% (18/18 requirements)
 //!
-//! **Test Coverage**: 150+ tests (unit, integration, documentation)
+//! **Test Coverage**: 80+ tests (unit, integration, property-based, documentation)
 //!
 //! # Examples
 //!
 //! See the `examples/` directory for complete usage examples:
 //! - `basic_checkout.rs`: Simple checkout flow
+//! - `browse_catalog.rs`: Browsing merchant catalogs
 //! - `error_handling.rs`: Handling common errors
-//! - `multi_merchant.rs`: Working with multiple merchants
+//! - `signature_generation.rs`: RFC 9421 signature generation
 //! - `jwks_generation.rs`: Generating JWKS for agent directory
+//! - `id_token_generation.rs`: JWT token creation
+//! - `acro_generation.rs`: ACRO object creation
+//! - `apc_generation.rs`: APC encryption/decryption
 //!
 //! # Error Handling
 //!
@@ -275,6 +279,8 @@
 
 pub mod error;
 pub mod mcp;
+pub mod reliability;
+pub mod security;
 pub mod tap;
 
 pub use error::{BridgeError, Result};
