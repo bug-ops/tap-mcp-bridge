@@ -9,35 +9,33 @@ license = "MIT OR Apache-2.0"
 version = "0.1.2"
 repository = "https://github.com/bug-ops/tap-mcp-bridge"
 
+# Dependencies are sorted alphabetically.
+# Only versions are specified here; features are in crate-specific Cargo.toml files.
 [workspace.dependencies]
 anyhow = "1"
 base64 = "0.22"
-criterion = { version = "0.8", features = ["html_reports"] }
+criterion = "0.8"
 ed25519-dalek = "2"
 hex = "0.4"
-josekit = { version = "0.10", features = ["vendored"] }
-jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
+josekit = "0.10"
+jsonwebtoken = "10"
 lru = "0.16"
 proptest = "1"
-reqwest = { version = "0.12", default-features = false, features = [
-    "http2",
-    "json",
-    "rustls-tls",
-] }
+reqwest = { version = "0.12", default-features = false }
 rmcp = "0.11"
-secrecy = { version = "0.10", features = ["serde"] }
-serde = { version = "1", features = ["derive"] }
+secrecy = "0.10"
+serde = "1"
 serde_json = "1"
 sha2 = "0.10"
 signature = "2"
 tap-mcp-bridge = { version = "0.1.2", path = "tap-mcp-bridge" }
 tap-mcp-server = { version = "0.1.2", path = "tap-mcp-server" }
 thiserror = "2"
-tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
+tokio = "1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = "0.3"
 url = "2"
-uuid = { version = "1.19", features = ["v4", "serde"] }
+uuid = "1.19"
 zeroize = "1"
 
 [workspace.lints.rust]
