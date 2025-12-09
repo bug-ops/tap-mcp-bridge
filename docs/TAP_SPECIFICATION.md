@@ -19,7 +19,7 @@ TAP uses Ed25519 public key cryptography for agent identity:
 
 All TAP requests are authenticated using HTTP Message Signatures:
 
-```
+```text
 Signature-Input: sig1=("@method" "@authority" "@path" "content-digest");
   created=1699564800;expires=1699565280;nonce="uuid-v4";keyid="kid-hash";
   alg="ed25519";tag="agent-browser-auth"
@@ -27,12 +27,14 @@ Signature: sig1=:base64url-encoded-signature:
 ```
 
 **Components signed**:
+
 - `@method`: HTTP method (GET, POST, etc.)
 - `@authority`: Host and port from URL
 - `@path`: URL path and query string
 - `content-digest`: SHA-256 hash of request body (RFC 9530 format)
 
 **Parameters**:
+
 - `created`: Unix timestamp when signature was created
 - `expires`: Unix timestamp when signature expires (created + 480 seconds max)
 - `nonce`: Unique value per request (UUID v4) for replay protection
@@ -70,6 +72,7 @@ Merchants fetch this JWKS to verify agent signatures.
 JWT containing consumer identity and authentication metadata.
 
 **Structure**:
+
 ```json
 {
   "header": {
@@ -92,6 +95,7 @@ JWT containing consumer identity and authentication metadata.
 **Purpose**: Proves agent has authenticated the consumer
 
 **Key Fields**:
+
 - `iss`: Agent's domain (issuer)
 - `sub`: Consumer identifier
 - `aud`: Merchant's domain (audience)
@@ -104,6 +108,7 @@ JWT containing consumer identity and authentication metadata.
 Container for consumer contextual data with agent signature.
 
 **Structure**:
+
 ```json
 {
   "nonce": "uuid-v4",
@@ -134,6 +139,7 @@ Container for consumer contextual data with agent signature.
 Container for encrypted payment credentials with agent signature.
 
 **Structure**:
+
 ```json
 {
   "nonce": "uuid-v4",
@@ -163,21 +169,25 @@ flowchart LR
 ```
 
 The `encryptedPaymentData` field contains RFC 7516 JWE with:
+
 - **Content Encryption**: A256GCM (AES-256-GCM)
 - **Key Encryption**: RSA-OAEP-256 with merchant's public key
 - **Format**: JWE Compact Serialization (5 dot-separated parts)
 
 **JWE Structure**:
-```
+
+```text
 header.encrypted_key.iv.ciphertext.tag
 ```
 
 **Payment Methods Supported**:
+
 1. **Card**: Card number, expiry, CVV, cardholder name
 2. **Bank Account**: Account number, routing number, account type, holder name
 3. **Digital Wallet**: Wallet type, wallet token, holder name
 
 **Security**:
+
 - Payment data encrypted before transmission (PCI-DSS compliant)
 - Merchant's public key fetched from their JWKS endpoint
 - Sensitive data zeroized in memory after encryption
@@ -264,6 +274,7 @@ graph LR
 ```
 
 **Components using the same nonce**:
+
 1. HTTP Message Signature (`nonce` parameter)
 2. ID Token JWT (`nonce` claim)
 3. ACRO (`nonce` field)

@@ -31,7 +31,7 @@ The server supports two log formats:
 
 Human-readable output for local development and debugging:
 
-```
+```text
 2025-01-18T10:15:30.123Z  INFO tap_mcp_server: Starting TAP-MCP Server log_format=Pretty version="0.1.0"
 2025-01-18T10:15:30.145Z  INFO tap_mcp_server: Configuration loaded successfully
 2025-01-18T10:15:30.156Z  INFO tap_mcp_server: TAP signer created successfully
@@ -182,6 +182,7 @@ All operations are automatically wrapped in spans with timing information:
 ### Nonce Correlation
 
 All TAP requests use a unique nonce (UUID v4) that appears across:
+
 - HTTP signature nonce
 - ID token nonce
 - ACRO nonce
@@ -355,6 +356,7 @@ groups:
 **Symptoms**: Server starts but no logs are visible
 
 **Solution**:
+
 ```bash
 # Check RUST_LOG is set
 echo $RUST_LOG
@@ -369,6 +371,7 @@ tap-mcp-server
 **Symptoms**: Log aggregation system rejects logs
 
 **Solution**:
+
 ```bash
 # Verify JSON format
 export LOG_FORMAT=json
@@ -383,6 +386,7 @@ tap-mcp-server 2>/dev/null | jq .
 **Symptoms**: `verify_agent_identity` returns `unhealthy`
 
 **Debug Steps**:
+
 ```bash
 # Check which check is failing
 tap-mcp-server 2>&1 | grep -i "health\|check"
@@ -400,6 +404,7 @@ echo $TAP_SIGNING_KEY | wc -c  # Should be 64 hex chars + newline = 65
 **Symptoms**: Logs don't include expected fields (merchant_url, consumer_id, etc.)
 
 **Solution**:
+
 ```bash
 # Enable span events
 export RUST_LOG=tap_mcp_server=debug,tap_mcp_bridge=debug
@@ -420,6 +425,7 @@ tap-mcp-server
 ```
 
 This enables all log levels including `trace`, which shows:
+
 - Function entry/exit
 - Internal state changes
 - Detailed cryptographic operations

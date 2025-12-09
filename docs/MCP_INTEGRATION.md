@@ -582,7 +582,7 @@ cargo build --release --bin tap-mcp-server
 
 3. Use in your MCP client:
 
-```
+```text
 User: "Checkout at merchant.example.com for user-123 with payment intent"
 
 Agent: I'll use the checkout_with_tap tool to process this transaction.
