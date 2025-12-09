@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-12-10
+
+### Added
+
+#### Phase 7: Enhanced Observability
+
+- `Metrics` struct with atomic counters for Prometheus-format metrics
+- `MetricsSnapshot` for point-in-time metrics capture
+- `to_prometheus()` method for Prometheus text format export
+- Request/response tracking for checkout, browse, verify operations
+- Error categorization and counting by type
+- Health check integration with metrics reporting
+
+#### Phase 8: Reliability Patterns
+
+- **Retry with exponential backoff** (`reliability::retry`)
+  - `RetryPolicy` with configurable max attempts, delays, and multiplier
+  - `retry_with_backoff()` async wrapper function
+  - `is_retryable()` helper for error classification
+  - Jitter support for thundering herd prevention
+- **Circuit breaker** (`reliability::circuit_breaker`)
+  - `CircuitBreaker` with three states: Closed, Open, HalfOpen
+  - `CircuitBreakerConfig` with configurable thresholds
+  - Automatic recovery with half-open probing
+  - `CircuitBreakerError` for state-specific errors
+
+#### Phase 9: Security Hardening
+
+- **Token bucket rate limiting** (`security::rate_limit`)
+  - `RateLimiter` with configurable RPS and burst size
+  - `RateLimitedSigner` wrapper for `TapSigner`
+  - Async `acquire()` and blocking `acquire_blocking()` methods
+- **Structured audit logging** (`security::audit`)
+  - `AuditEventType` enum for security events
+  - `AuditEvent` with builder pattern and metadata
+  - Sensitive data redaction (credit cards, CVV, SSN)
+  - Tracing target "audit" for log filtering
+
+#### New Error Variants
+
+- `BridgeError::RateLimitExceeded` - Rate limit exceeded
+- `BridgeError::CircuitOpen` - Circuit breaker is open
+
+### Changed
+
+#### Dependencies
+
+- Upgraded `rmcp` from 0.10 to 0.11
+- Reorganized workspace dependencies (versions in root, features in crates)
+- Sorted all dependencies alphabetically
+
+#### Documentation
+
+- Updated README with production features section
+- Added all 8 examples to README
+- Updated lib.rs with new modules and test count (200+)
+- Improved error handling documentation
+
+### Fixed
+
+- Removed redundant `Future` imports (Rust 2024 prelude)
+- Fixed rmcp 0.11 compatibility (added `meta` field to `ListToolsResult`)
+
 ## [0.1.2] - 2025-12-08
 
 ### Changed
@@ -156,17 +219,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sub-microsecond span creation
 - JSON log formatting: 3.59 µs average
 
-## [Unreleased]
-
-### Planned
-
-- Phase 8: Reliability Patterns (retry, circuit breaker)
-- Phase 9: Security Hardening
-- Phase 10: Performance Optimization
-
 ---
 
+[0.2.0]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.2.0
 [0.1.2]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.1.2
 [0.1.1]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.1.1
 [0.1.0]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.1.0
-[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.1.2...HEAD

@@ -2056,7 +2056,7 @@ dependencies = [
 
 [[package]]
 name = "tap-mcp-bridge"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "base64",
  "criterion",
@@ -2084,7 +2084,7 @@ dependencies = [
 
 [[package]]
 name = "tap-mcp-server"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "ed25519-dalek",
