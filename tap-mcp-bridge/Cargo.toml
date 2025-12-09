@@ -19,32 +19,34 @@ normal = [
     "secrecy",      # Used for ACRO/APC sensitive data handling
 ]
 
+# Dependencies are sorted alphabetically.
 [dependencies]
 base64.workspace = true
 ed25519-dalek.workspace = true
 hex.workspace = true
-josekit.workspace = true
-jsonwebtoken.workspace = true
+josekit = { workspace = true, features = ["vendored"] }
+jsonwebtoken = { workspace = true, features = ["aws_lc_rs"] }
 lru.workspace = true
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["http2", "json", "rustls-tls"] }
 rmcp.workspace = true
-secrecy.workspace = true
-serde.workspace = true
+secrecy = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
 signature.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 tracing.workspace = true
 url.workspace = true
-uuid.workspace = true
+uuid = { workspace = true, features = ["serde", "v4"] }
 zeroize.workspace = true
 
+# Dev dependencies are sorted alphabetically.
 [dev-dependencies]
-criterion.workspace = true
+criterion = { workspace = true, features = ["html_reports"] }
 proptest.workspace = true
-tokio = { workspace = true, features = ["time"] }
-tracing-subscriber.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "time"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 
 [[bench]]
 name = "observability_overhead"

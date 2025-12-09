@@ -9,12 +9,6 @@ Rust library and MCP server for Visa's Trusted Agent Protocol (TAP), enabling AI
 
 ## Workspace Structure
 
-```text
-tap-mcp-bridge/
-├── tap-mcp-bridge/    # Library crate - TAP protocol implementation
-└── tap-mcp-server/    # Binary crate - MCP server for AI agents
-```
-
 | Crate | Type | Description |
 |-------|------|-------------|
 | [`tap-mcp-bridge`](tap-mcp-bridge/) | Library | RFC 9421 signatures, JWE encryption, TAP protocol |
@@ -35,7 +29,7 @@ tap-mcp-bridge = "0.1"
 cargo install --path tap-mcp-server
 ```
 
-Configure your MCP client:
+Configure your MCP client (Claude Desktop, etc.):
 
 ```json
 {
@@ -59,7 +53,7 @@ Configure your MCP client:
 
 ```rust
 use ed25519_dalek::SigningKey;
-use tap_mcp_bridge::tap::TapSigner;
+use tap_mcp_bridge::tap::{InteractionType, TapSigner};
 
 let signing_key = SigningKey::from_bytes(&[0u8; 32]);
 let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
@@ -69,13 +63,16 @@ let signature = signer.sign_request(
     "merchant.example.com",
     "/checkout",
     b"request body",
-    tap_mcp_bridge::tap::InteractionType::Checkout,
-);
+    InteractionType::Checkout,
+)?;
+
+println!("Signature: {}", signature.signature);
+println!("Signature-Input: {}", signature.signature_input);
 ```
 
 ## MCP Tools
 
-The server exposes three tools:
+The server exposes three tools for AI agents:
 
 | Tool | Description |
 |------|-------------|
@@ -85,40 +82,79 @@ The server exposes three tools:
 
 ## Features
 
+### TAP Protocol
+
 - **RFC 9421** HTTP Message Signatures with Ed25519
 - **RFC 7516** JWE encryption for payment data (A256GCM + RSA-OAEP-256)
 - **RFC 7638** JWK Thumbprints for key identification
 - **ID Tokens** (JWT) for consumer authentication
-- **ACRO** - Agentic Consumer Recognition Object
-- **APC** - Agentic Payment Container with JWE
-- **Replay protection** via UUID v4 nonce and LRU cache
+- **ACRO** — Agentic Consumer Recognition Object
+- **APC** — Agentic Payment Container with JWE encryption
+
+### Production Features
+
+- **Retry with backoff** — Exponential backoff with jitter for transient failures
+- **Circuit breaker** — Protection against cascading failures
+- **Rate limiting** — Token bucket algorithm for request throttling
+- **Audit logging** — Structured security events with sensitive data redaction
+- **Prometheus metrics** — Request counters, error rates, latency tracking
+- **Replay protection** — UUID v4 nonce with LRU cache validation
+
+## Examples
+
+```bash
+# Basic checkout flow
+cargo run --example basic_checkout
+
+# Browse merchant catalog
+cargo run --example browse_catalog
+
+# Error handling patterns
+cargo run --example error_handling
+
+# TAP signature generation
+cargo run --example signature_generation
+
+# JWKS for agent directory
+cargo run --example jwks_generation
+
+# ID Token (JWT) generation
+cargo run --example id_token_generation
+
+# ACRO generation
+cargo run --example acro_generation
+
+# APC encryption/decryption
+cargo run --example apc_generation
+```
+
+> [!TIP]
+> Set `AGENT_SIGNING_KEY` environment variable before running examples:
+> ```bash
+> export AGENT_SIGNING_KEY=$(openssl rand -hex 32)
+> ```
 
 ## Documentation
 
 | Resource | Description |
 |----------|-------------|
 | [API Reference](https://docs.rs/tap-mcp-bridge) | Complete API documentation |
-| [TAP Specification](docs/TAP_SPECIFICATION.md) | Protocol implementation details |
-| [MCP Integration](docs/MCP_INTEGRATION.md) | MCP server configuration |
-| [Observability](docs/OBSERVABILITY.md) | Logging and health checks |
 | [Examples](tap-mcp-bridge/examples/) | Runnable code examples |
-
-## Examples
-
-```bash
-cargo run --example basic_checkout
-cargo run --example apc_generation
-cargo run --example signature_generation
-```
 
 ## Development
 
 ```bash
+# Install tools
+cargo install cargo-nextest cargo-make cargo-deny
+
 # Quick verification
 cargo make pre-commit
 
-# Full test suite
+# Full test suite (200+ tests)
 cargo nextest run --all-features
+
+# Security audit
+cargo deny check
 
 # Documentation
 cargo doc --no-deps --open
@@ -130,6 +166,7 @@ Licensed under MIT OR Apache-2.0 at your option.
 
 ## Resources
 
-- [TAP Protocol](https://developer.visa.com/capabilities/trusted-agent-protocol/) - Official Visa documentation
-- [MCP Protocol](https://modelcontextprotocol.io/) - Anthropic's Model Context Protocol
-- [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html) - HTTP Message Signatures
+- [TAP Protocol](https://developer.visa.com/capabilities/trusted-agent-protocol/) — Official Visa documentation
+- [MCP Protocol](https://modelcontextprotocol.io/) — Anthropic's Model Context Protocol
+- [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html) — HTTP Message Signatures
+- [RFC 7516](https://www.rfc-editor.org/rfc/rfc7516.html) — JSON Web Encryption (JWE)

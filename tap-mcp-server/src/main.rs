@@ -367,6 +367,7 @@ impl TapMcpServer {
             agent_id: self.agent_id.to_string(),
             uptime_secs,
             checks,
+            metrics: None, // TODO: Add metrics collection in future implementation
         };
 
         let json = report.to_json().map_err(|e| {
@@ -386,7 +387,7 @@ impl ServerHandler for TapMcpServer {
         _pagination: Option<PaginatedRequestParam>,
         _ctx: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult { tools: self.tool_router.list_all(), next_cursor: None })
+        Ok(ListToolsResult { tools: self.tool_router.list_all(), next_cursor: None, meta: None })
     }
 
     async fn call_tool(

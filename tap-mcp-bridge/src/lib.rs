@@ -159,6 +159,8 @@
 //! - [`tap`]: TAP protocol implementation (RFC 9421 signatures, Ed25519 signing)
 //! - [`mcp`]: MCP tools for AI agent integration (checkout, browse)
 //! - [`error`]: Error types with recovery guidance
+//! - [`reliability`]: Production reliability patterns (retry, circuit breaker)
+//! - [`security`]: Security hardening (rate limiting, audit logging)
 //!
 //! # Security Considerations
 //!
@@ -211,17 +213,28 @@
 //! - ✅ Agentic Consumer Recognition Object (ACRO)
 //! - ✅ Agentic Payment Container (APC)
 //!
+//! **Production Features**:
+//! - ✅ Prometheus-format metrics (`observability` module in tap-mcp-server)
+//! - ✅ Retry with exponential backoff (`reliability::retry`)
+//! - ✅ Circuit breaker pattern (`reliability::circuit_breaker`)
+//! - ✅ Token bucket rate limiting (`security::rate_limit`)
+//! - ✅ Structured audit logging (`security::audit`)
+//!
 //! **TAP Compliance**: 100% (18/18 requirements)
 //!
-//! **Test Coverage**: 150+ tests (unit, integration, documentation)
+//! **Test Coverage**: 200+ tests (unit, integration, property-based, documentation)
 //!
 //! # Examples
 //!
 //! See the `examples/` directory for complete usage examples:
 //! - `basic_checkout.rs`: Simple checkout flow
+//! - `browse_catalog.rs`: Browsing merchant catalogs
 //! - `error_handling.rs`: Handling common errors
-//! - `multi_merchant.rs`: Working with multiple merchants
+//! - `signature_generation.rs`: RFC 9421 signature generation
 //! - `jwks_generation.rs`: Generating JWKS for agent directory
+//! - `id_token_generation.rs`: JWT token creation
+//! - `acro_generation.rs`: ACRO object creation
+//! - `apc_generation.rs`: APC encryption/decryption
 //!
 //! # Error Handling
 //!
@@ -259,7 +272,15 @@
 //!     }
 //!     Err(BridgeError::HttpError(e)) => {
 //!         eprintln!("Network error: {}", e);
-//!         // Retry with exponential backoff
+//!         // Retry with exponential backoff using reliability::retry_with_backoff
+//!     }
+//!     Err(BridgeError::RateLimitExceeded) => {
+//!         eprintln!("Rate limit exceeded");
+//!         // Wait and retry after backoff
+//!     }
+//!     Err(BridgeError::CircuitOpen) => {
+//!         eprintln!("Circuit breaker is open");
+//!         // Wait for circuit recovery
 //!     }
 //!     Err(e) => eprintln!("Other error: {}", e),
 //! }
@@ -275,6 +296,8 @@
 
 pub mod error;
 pub mod mcp;
+pub mod reliability;
+pub mod security;
 pub mod tap;
 
 pub use error::{BridgeError, Result};
