@@ -387,7 +387,7 @@ impl ServerHandler for TapMcpServer {
         _pagination: Option<PaginatedRequestParam>,
         _ctx: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult { tools: self.tool_router.list_all(), next_cursor: None })
+        Ok(ListToolsResult { tools: self.tool_router.list_all(), next_cursor: None, meta: None })
     }
 
     async fn call_tool(
