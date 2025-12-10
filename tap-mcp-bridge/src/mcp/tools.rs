@@ -371,7 +371,7 @@ async fn execute_tap_request(
 }
 
 /// Validates consumer ID format.
-fn validate_consumer_id(consumer_id: &str) -> Result<()> {
+pub(crate) fn validate_consumer_id(consumer_id: &str) -> Result<()> {
     if consumer_id.is_empty() {
         return Err(BridgeError::InvalidConsumerId("consumer_id cannot be empty".into()));
     }
@@ -393,7 +393,7 @@ fn validate_consumer_id(consumer_id: &str) -> Result<()> {
 }
 
 /// Parses and validates merchant URL.
-fn parse_merchant_url(url_str: &str) -> Result<url::Url> {
+pub(crate) fn parse_merchant_url(url_str: &str) -> Result<url::Url> {
     let url = url::Url::parse(url_str)
         .map_err(|e| BridgeError::InvalidMerchantUrl(format!("parse error: {e}")))?;
 

@@ -5,6 +5,24 @@
 //!
 //! # Available Tools
 //!
+//! ## Catalog Browsing
+//! - [`products::get_products`]: Browse product catalog with filters
+//! - [`products::get_product`]: Get single product details
+//!
+//! ## Shopping Cart
+//! - [`cart::add_to_cart`]: Add item to shopping cart
+//! - [`cart::get_cart`]: Retrieve cart state
+//! - [`cart::update_cart_item`]: Update item quantity
+//! - [`cart::remove_from_cart`]: Remove item from cart
+//!
+//! ## Order Management
+//! - [`orders::create_order`]: Create order from cart
+//! - [`orders::get_order`]: Retrieve order details
+//!
+//! ## Payment Processing
+//! - [`payment::process_payment`]: Process payment with APC encryption
+//!
+//! ## Legacy Tools
 //! - [`checkout_with_tap`]: Execute a payment checkout with TAP authentication
 //! - [`browse_merchant`]: Browse merchant catalog with verified agent identity
 //!
@@ -56,6 +74,11 @@
 //! # }
 //! ```
 
+pub mod cart;
+pub mod models;
+pub mod orders;
+pub mod payment;
+pub mod products;
 pub mod tools;
 
 pub use tools::{
