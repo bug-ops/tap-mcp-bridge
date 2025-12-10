@@ -234,6 +234,24 @@ pub enum BridgeError {
     /// Check the parameter value and ensure it meets the documented requirements.
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+
+    /// Merchant configuration error.
+    ///
+    /// This error occurs when merchant configuration is invalid or cannot be loaded.
+    #[error("Merchant configuration error: {0}")]
+    MerchantConfigError(String),
+
+    /// Field mapping error.
+    ///
+    /// This error occurs when response fields cannot be mapped to standard format.
+    #[error("Field mapping error: {0}")]
+    FieldMappingError(String),
+
+    /// Response transformation error.
+    ///
+    /// This error occurs when a merchant response cannot be transformed to standard format.
+    #[error("Response transformation error: {0}")]
+    TransformationError(String),
 }
 
 #[cfg(test)]

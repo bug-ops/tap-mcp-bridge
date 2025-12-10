@@ -296,11 +296,13 @@
 
 pub mod error;
 pub mod mcp;
+pub mod merchant;
 pub mod reliability;
 pub mod security;
 pub mod tap;
 
 pub use error::{BridgeError, Result};
+pub use merchant::{DefaultMerchant, MerchantApi, MerchantConfig};
 
 #[cfg(test)]
 mod tests {
