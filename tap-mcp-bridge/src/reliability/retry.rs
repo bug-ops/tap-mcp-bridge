@@ -262,6 +262,10 @@ pub fn is_retryable(error: &BridgeError) -> bool {
         BridgeError::RateLimitExceeded => false,
         // Don't retry circuit breaker open (should wait for recovery)
         BridgeError::CircuitOpen => false,
+        // Don't retry transport errors (protocol-specific failures)
+        BridgeError::TransportError(_) => false,
+        // Don't retry unsupported protocol errors (configuration issue)
+        BridgeError::UnsupportedProtocol(_) => false,
     }
 }
 

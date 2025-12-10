@@ -263,5 +263,17 @@ fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, Br
             eprintln!("   → Fix: Check merchant response format");
             eprintln!("   → Fix: Verify custom transformers are correct");
         }
+
+        Err(BridgeError::TransportError(msg)) => {
+            eprintln!("   ✗ Transport error: {msg}");
+            eprintln!("   → Fix: Check transport configuration");
+            eprintln!("   → Fix: Verify merchant supports selected protocol");
+        }
+
+        Err(BridgeError::UnsupportedProtocol(msg)) => {
+            eprintln!("   ✗ Unsupported protocol: {msg}");
+            eprintln!("   → Fix: Enable required feature flags");
+            eprintln!("   → Fix: Use a supported transport protocol");
+        }
     }
 }

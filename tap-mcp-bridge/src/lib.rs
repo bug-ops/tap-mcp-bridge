@@ -158,6 +158,7 @@
 //!
 //! - [`tap`]: TAP protocol implementation (RFC 9421 signatures, Ed25519 signing)
 //! - [`mcp`]: MCP tools for AI agent integration (checkout, browse)
+//! - [`transport`]: Transport protocol abstraction (HTTP/1.1, HTTP/2, future: HTTP/3, gRPC)
 //! - [`error`]: Error types with recovery guidance
 //! - [`reliability`]: Production reliability patterns (retry, circuit breaker)
 //! - [`security`]: Security hardening (rate limiting, audit logging)
@@ -300,6 +301,7 @@ pub mod merchant;
 pub mod reliability;
 pub mod security;
 pub mod tap;
+pub mod transport;
 
 pub use error::{BridgeError, Result};
 pub use merchant::{DefaultMerchant, MerchantApi, MerchantConfig};

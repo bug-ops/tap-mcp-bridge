@@ -252,6 +252,35 @@ pub enum BridgeError {
     /// This error occurs when a merchant response cannot be transformed to standard format.
     #[error("Response transformation error: {0}")]
     TransformationError(String),
+
+    /// Transport error.
+    ///
+    /// This error occurs when a transport-layer operation fails.
+    /// Common causes include:
+    /// - Protocol-specific failures (HTTP/2 stream errors, gRPC connection issues)
+    /// - Transport configuration errors
+    /// - Protocol negotiation failures
+    ///
+    /// # Recovery
+    ///
+    /// Check the transport configuration and ensure the merchant supports
+    /// the selected protocol.
+    #[error("Transport error: {0}")]
+    TransportError(String),
+
+    /// Unsupported protocol.
+    ///
+    /// This error occurs when attempting to use a protocol that is not
+    /// supported or not enabled via feature flags.
+    ///
+    /// # Recovery
+    ///
+    /// Verify that:
+    /// - The protocol is supported by the library
+    /// - The necessary feature flags are enabled in Cargo.toml
+    /// - The merchant supports the selected protocol
+    #[error("Protocol not supported: {0}")]
+    UnsupportedProtocol(String),
 }
 
 #[cfg(test)]
