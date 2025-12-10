@@ -20,7 +20,7 @@ Rust library and MCP server for Visa's Trusted Agent Protocol (TAP), enabling AI
 
 ```toml
 [dependencies]
-tap-mcp-bridge = "0.1"
+tap-mcp-bridge = "0.2"
 ```
 
 ### As MCP Server
@@ -72,13 +72,22 @@ println!("Signature-Input: {}", signature.signature_input);
 
 ## MCP Tools
 
-The server exposes three tools for AI agents:
+The server exposes tools for AI agents:
 
 | Tool | Description |
 |------|-------------|
 | `checkout_with_tap` | Execute payment with TAP authentication |
 | `browse_merchant` | Browse merchant catalog with verified identity |
 | `verify_agent_identity` | Health check and agent verification |
+| `get_products` | Browse product catalog with filters |
+| `get_product` | Get single product details |
+| `add_to_cart` | Add item to shopping cart |
+| `get_cart` | Get current cart state |
+| `update_cart_item` | Update item quantity |
+| `remove_from_cart` | Remove item from cart |
+| `create_order` | Create order from cart |
+| `get_order` | Get order status |
+| `process_payment` | Complete payment with APC encryption |
 
 ## Features
 
@@ -91,6 +100,62 @@ The server exposes three tools for AI agents:
 - **ACRO** — Agentic Consumer Recognition Object
 - **APC** — Agentic Payment Container with JWE encryption
 
+### Merchant Abstraction
+
+Flexible merchant API integration with trait-based abstraction:
+
+```rust
+use tap_mcp_bridge::{DefaultMerchant, MerchantApi};
+
+// Standard TAP merchant
+let merchant = DefaultMerchant::new();
+
+// Custom merchant from TOML configuration
+let merchant = DefaultMerchant::from_toml(r#"
+    name = "ACME Store"
+    base_url = "https://api.acme.com"
+    api_prefix = "/api/v2"
+
+    [endpoints]
+    products = "/catalog/items"
+    cart = "/basket"
+
+    [field_mappings.request]
+    consumer_id = "customerId"
+    product_id = "sku"
+"#)?;
+```
+
+> [!TIP]
+> See [`examples/merchants/`](tap-mcp-bridge/examples/merchants/) for TOML configuration examples.
+
+### Transport Abstraction
+
+Pluggable transport layer supporting multiple protocols:
+
+```rust
+use tap_mcp_bridge::transport::{HttpTransport, HttpConfig, HttpVersion};
+
+// Default HTTP transport with connection pooling
+let transport = HttpTransport::new();
+
+// HTTP/2 with custom configuration
+let config = HttpConfig {
+    http_version: HttpVersion::Http2,
+    timeout_secs: 60,
+    pool_max_idle_per_host: 50,
+    ..Default::default()
+};
+let transport = HttpTransport::with_config(&config)?;
+```
+
+**Supported protocols:**
+- HTTP/1.1 (default)
+- HTTP/2 with multiplexing
+- HTTP/3 (QUIC) — planned
+- gRPC — planned
+- JSON-RPC — planned
+
 ### Production Features
 
 - **Retry with backoff** — Exponential backoff with jitter for transient failures
@@ -100,11 +165,23 @@ The server exposes three tools for AI agents:
 - **Prometheus metrics** — Request counters, error rates, latency tracking
 - **Replay protection** — UUID v4 nonce with LRU cache validation
 
+### Security
+
+- HTTPS enforcement (HTTP URLs rejected)
+- Localhost/loopback blocking
+- Path traversal prevention
+- CRLF header injection prevention
+- Field mapping injection protection
+- Timeout bounds validation
+
 ## Examples
 
 ```bash
 # Basic checkout flow
 cargo run --example basic_checkout
+
+# Full e-commerce flow (products → cart → order → payment)
+cargo run --example full_checkout_flow
 
 # Browse merchant catalog
 cargo run --example browse_catalog
@@ -134,12 +211,55 @@ cargo run --example apc_generation
 > export AGENT_SIGNING_KEY=$(openssl rand -hex 32)
 > ```
 
+## Configuration
+
+### Merchant Configuration (TOML)
+
+```toml
+name = "My Merchant"
+base_url = "https://api.merchant.com"
+api_prefix = "/api/v1"
+
+[endpoints]
+products = "/products"
+cart = "/cart"
+checkout = "/checkout"
+
+[field_mappings.request]
+consumer_id = "customer_id"
+product_id = "item_id"
+
+[field_mappings.response]
+customer_id = "consumer_id"
+
+[auth]
+type = "api_key"
+header = "X-API-Key"
+env_var = "MERCHANT_API_KEY"
+
+pagination = "page_based"  # or "offset_based", "cursor_based"
+```
+
+### Transport Configuration (TOML)
+
+```toml
+[transport]
+protocol = "http2"
+
+[transport.http]
+timeout_secs = 30
+connect_timeout_secs = 10
+pool_max_idle_per_host = 100
+http_version = "http2"  # or "http1", "auto"
+```
+
 ## Documentation
 
 | Resource | Description |
 |----------|-------------|
 | [API Reference](https://docs.rs/tap-mcp-bridge) | Complete API documentation |
 | [Examples](tap-mcp-bridge/examples/) | Runnable code examples |
+| [Merchant Configs](tap-mcp-bridge/examples/merchants/) | TOML configuration examples |
 
 ## Development
 
@@ -150,7 +270,7 @@ cargo install cargo-nextest cargo-make cargo-deny
 # Quick verification
 cargo make pre-commit
 
-# Full test suite (200+ tests)
+# Full test suite (490+ tests)
 cargo nextest run --all-features
 
 # Security audit
