@@ -145,7 +145,10 @@ pub async fn checkout_with_tap(
 ) -> Result<CheckoutResult> {
     info!(method = "POST", "executing TAP checkout");
 
-    let path = format!("/checkout?consumer_id={}&intent={}", params.consumer_id, params.intent);
+    let path = super::http::build_url_with_query("/checkout", &[
+        ("consumer_id", &params.consumer_id),
+        ("intent", &params.intent),
+    ])?;
 
     // Create contextual data from params
     let contextual_data = crate::tap::acro::ContextualData {
@@ -214,7 +217,8 @@ pub async fn checkout_with_tap(
 pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result<BrowseResult> {
     info!(method = "GET", "browsing merchant catalog");
 
-    let path = format!("/catalog?consumer_id={}", params.consumer_id);
+    let path =
+        super::http::build_url_with_query("/catalog", &[("consumer_id", &params.consumer_id)])?;
 
     // Create contextual data from params
     let contextual_data = crate::tap::acro::ContextualData {
@@ -371,7 +375,7 @@ async fn execute_tap_request(
 }
 
 /// Validates consumer ID format.
-fn validate_consumer_id(consumer_id: &str) -> Result<()> {
+pub(crate) fn validate_consumer_id(consumer_id: &str) -> Result<()> {
     if consumer_id.is_empty() {
         return Err(BridgeError::InvalidConsumerId("consumer_id cannot be empty".into()));
     }
@@ -393,7 +397,7 @@ fn validate_consumer_id(consumer_id: &str) -> Result<()> {
 }
 
 /// Parses and validates merchant URL.
-fn parse_merchant_url(url_str: &str) -> Result<url::Url> {
+pub(crate) fn parse_merchant_url(url_str: &str) -> Result<url::Url> {
     let url = url::Url::parse(url_str)
         .map_err(|e| BridgeError::InvalidMerchantUrl(format!("parse error: {e}")))?;
 

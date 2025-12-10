@@ -248,7 +248,8 @@ pub fn is_retryable(error: &BridgeError) -> bool {
         BridgeError::SignatureError(_)
         | BridgeError::CryptoError(_)
         | BridgeError::InvalidMerchantUrl(_)
-        | BridgeError::InvalidConsumerId(_) => false,
+        | BridgeError::InvalidConsumerId(_)
+        | BridgeError::InvalidInput(_) => false,
         // Don't retry merchant protocol errors
         BridgeError::MerchantError(_) => false,
         // Don't retry security errors

@@ -239,5 +239,11 @@ fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, Br
             eprintln!("   → Fix: Wait for circuit breaker to recover");
             eprintln!("   → Fix: Check merchant availability");
         }
+
+        Err(BridgeError::InvalidInput(msg)) => {
+            eprintln!("   ✗ Invalid input: {msg}");
+            eprintln!("   → Fix: Check input parameter constraints");
+            eprintln!("   → Fix: Ensure no null bytes or invalid characters");
+        }
     }
 }

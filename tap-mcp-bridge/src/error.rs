@@ -220,6 +220,20 @@ pub enum BridgeError {
     /// underlying service has recovered.
     #[error("Circuit breaker is open")]
     CircuitOpen,
+
+    /// Invalid input parameter.
+    ///
+    /// This error occurs when input validation rejects a parameter value.
+    /// Common causes include:
+    /// - Parameter exceeds maximum length
+    /// - Parameter contains null bytes or invalid characters
+    /// - Parameter format doesn't match expected pattern
+    ///
+    /// # Recovery
+    ///
+    /// Check the parameter value and ensure it meets the documented requirements.
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
 }
 
 #[cfg(test)]
