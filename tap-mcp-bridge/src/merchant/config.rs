@@ -197,7 +197,7 @@ impl EndpointConfig {
 }
 
 /// Validates an endpoint path template for security issues.
-fn validate_endpoint_path(name: &str, path: &str) -> Result<()> {
+pub(crate) fn validate_endpoint_path(name: &str, path: &str) -> Result<()> {
     // Check for path traversal
     if path.contains("..") {
         return Err(BridgeError::MerchantConfigError(format!(
@@ -279,7 +279,7 @@ impl FieldMappingConfig {
 }
 
 /// Validates a field name for security issues.
-fn validate_field_name(context: &str, name: &str) -> Result<()> {
+pub(crate) fn validate_field_name(context: &str, name: &str) -> Result<()> {
     // Check for forbidden names (prototype pollution)
     if FORBIDDEN_FIELD_NAMES.contains(&name) {
         return Err(BridgeError::MerchantConfigError(format!(
