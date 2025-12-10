@@ -145,7 +145,10 @@ pub async fn checkout_with_tap(
 ) -> Result<CheckoutResult> {
     info!(method = "POST", "executing TAP checkout");
 
-    let path = format!("/checkout?consumer_id={}&intent={}", params.consumer_id, params.intent);
+    let path = super::http::build_url_with_query("/checkout", &[
+        ("consumer_id", &params.consumer_id),
+        ("intent", &params.intent),
+    ])?;
 
     // Create contextual data from params
     let contextual_data = crate::tap::acro::ContextualData {
@@ -214,7 +217,8 @@ pub async fn checkout_with_tap(
 pub async fn browse_merchant(signer: &TapSigner, params: BrowseParams) -> Result<BrowseResult> {
     info!(method = "GET", "browsing merchant catalog");
 
-    let path = format!("/catalog?consumer_id={}", params.consumer_id);
+    let path =
+        super::http::build_url_with_query("/catalog", &[("consumer_id", &params.consumer_id)])?;
 
     // Create contextual data from params
     let contextual_data = crate::tap::acro::ContextualData {

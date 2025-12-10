@@ -9,7 +9,10 @@ use tracing::{info, instrument};
 use crate::{
     error::Result,
     mcp::{
-        http::{build_url_with_query, create_http_client, execute_tap_request_with_acro},
+        http::{
+            HttpMethod, build_url_with_query, create_http_client, execute_tap_request_with_acro,
+            validate_search_param,
+        },
         models::{Product, ProductCatalog},
     },
     tap::{InteractionType, TapSigner, acro::ContextualData},
@@ -131,6 +134,14 @@ pub async fn get_products(signer: &TapSigner, params: GetProductsParams) -> Resu
         },
     };
 
+    // Validate search parameters
+    if let Some(ref category) = params.category {
+        validate_search_param(category, "category")?;
+    }
+    if let Some(ref search) = params.search {
+        validate_search_param(search, "search")?;
+    }
+
     // Build query parameters with proper URL encoding
     let mut query_params = vec![("consumer_id", params.consumer_id.as_str())];
 
@@ -161,7 +172,7 @@ pub async fn get_products(signer: &TapSigner, params: GetProductsParams) -> Resu
         signer,
         &params.merchant_url,
         &params.consumer_id,
-        "GET",
+        HttpMethod::Get,
         &path,
         InteractionType::Browse,
         contextual_data,
@@ -241,7 +252,7 @@ pub async fn get_product(signer: &TapSigner, params: GetProductParams) -> Result
         signer,
         &params.merchant_url,
         &params.consumer_id,
-        "GET",
+        HttpMethod::Get,
         &path,
         InteractionType::Browse,
         contextual_data,

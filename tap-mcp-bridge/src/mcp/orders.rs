@@ -9,7 +9,9 @@ use tracing::{info, instrument};
 use crate::{
     error::Result,
     mcp::{
-        http::{build_url_with_query, create_http_client, execute_tap_request_with_acro},
+        http::{
+            HttpMethod, build_url_with_query, create_http_client, execute_tap_request_with_acro,
+        },
         models::{Address, Order},
     },
     tap::{InteractionType, TapSigner, acro::ContextualData},
@@ -168,7 +170,7 @@ pub async fn create_order(signer: &TapSigner, params: CreateOrderParams) -> Resu
         signer,
         &params.merchant_url,
         &params.consumer_id,
-        "POST",
+        HttpMethod::Post,
         &path,
         InteractionType::Checkout,
         contextual_data,
@@ -243,7 +245,7 @@ pub async fn get_order(signer: &TapSigner, params: GetOrderParams) -> Result<Ord
         signer,
         &params.merchant_url,
         &params.consumer_id,
-        "GET",
+        HttpMethod::Get,
         &path,
         InteractionType::Browse,
         contextual_data,

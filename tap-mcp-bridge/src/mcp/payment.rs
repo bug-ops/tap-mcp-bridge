@@ -11,7 +11,10 @@ use tracing::{info, instrument};
 use crate::{
     error::{BridgeError, Result},
     mcp::{
-        http::{build_url_with_query, create_http_client, execute_tap_request_with_custom_nonce},
+        http::{
+            HttpMethod, build_url_with_query, create_http_client,
+            execute_tap_request_with_custom_nonce,
+        },
         models::PaymentResult,
     },
     security::{RateLimitConfig, RateLimiter},
@@ -255,7 +258,7 @@ pub async fn process_payment(
         signer,
         &params.merchant_url,
         &params.consumer_id,
-        "POST",
+        HttpMethod::Post,
         &path,
         InteractionType::Checkout,
         contextual_data,

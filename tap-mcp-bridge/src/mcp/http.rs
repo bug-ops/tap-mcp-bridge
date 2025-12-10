@@ -15,6 +15,35 @@ use crate::{
     tap::{InteractionType, TapSigner, acro::ContextualData},
 };
 
+/// HTTP methods supported by TAP requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HttpMethod {
+    /// HTTP GET method.
+    Get,
+    /// HTTP POST method.
+    Post,
+    /// HTTP PUT method.
+    Put,
+    /// HTTP DELETE method.
+    Delete,
+}
+
+impl HttpMethod {
+    /// Returns the method as a string slice.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::Post => "POST",
+            Self::Put => "PUT",
+            Self::Delete => "DELETE",
+        }
+    }
+}
+
+/// Maximum length for search parameters (defense in depth).
+const MAX_SEARCH_PARAM_LENGTH: usize = 256;
+
 /// Creates a configured HTTP client with connection pooling.
 ///
 /// Configuration:
@@ -32,6 +61,35 @@ pub fn create_http_client() -> Result<Client> {
         .connect_timeout(Duration::from_secs(10))
         .build()
         .map_err(BridgeError::HttpError)
+}
+
+/// Validates a search or category parameter.
+///
+/// # Requirements
+///
+/// - Maximum 256 characters
+/// - No null bytes
+/// - Only printable ASCII or whitespace characters
+///
+/// # Errors
+///
+/// Returns error if validation fails.
+pub fn validate_search_param(param: &str, param_name: &str) -> Result<()> {
+    if param.len() > MAX_SEARCH_PARAM_LENGTH {
+        return Err(BridgeError::InvalidInput(format!(
+            "{param_name} exceeds {MAX_SEARCH_PARAM_LENGTH} characters"
+        )));
+    }
+
+    if param.contains('\0') {
+        return Err(BridgeError::InvalidInput(format!("null bytes not allowed in {param_name}")));
+    }
+
+    if !param.chars().all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace()) {
+        return Err(BridgeError::InvalidInput(format!("{param_name} contains invalid characters")));
+    }
+
+    Ok(())
 }
 
 /// Executes a TAP-authenticated HTTP request with ACRO.
@@ -55,7 +113,7 @@ pub async fn execute_tap_request_with_acro<T: Serialize>(
     signer: &TapSigner,
     merchant_url: &str,
     consumer_id: &str,
-    method: &str,
+    method: HttpMethod,
     path: &str,
     interaction_type: InteractionType,
     contextual_data: ContextualData,
@@ -81,18 +139,15 @@ pub async fn execute_tap_request_with_acro<T: Serialize>(
             .map_err(|e| BridgeError::CryptoError(format!("ACRO serialization failed: {e}")))?
     };
 
-    let signature = signer.sign_request(method, authority, path, &body, interaction_type)?;
+    let signature =
+        signer.sign_request(method.as_str(), authority, path, &body, interaction_type)?;
 
+    let full_url = format!("{url}{path}");
     let request = match method {
-        "POST" => client.post(format!("{url}{path}")),
-        "GET" => client.get(format!("{url}{path}")),
-        "PUT" => client.put(format!("{url}{path}")),
-        "DELETE" => client.delete(format!("{url}{path}")),
-        _ => {
-            return Err(BridgeError::InvalidMerchantUrl(format!(
-                "unsupported HTTP method: {method}"
-            )));
-        }
+        HttpMethod::Get => client.get(&full_url),
+        HttpMethod::Post => client.post(&full_url),
+        HttpMethod::Put => client.put(&full_url),
+        HttpMethod::Delete => client.delete(&full_url),
     };
 
     let content_digest = TapSigner::compute_content_digest(&body);
@@ -140,7 +195,7 @@ pub async fn execute_tap_request_with_custom_nonce<T: Serialize>(
     signer: &TapSigner,
     merchant_url: &str,
     consumer_id: &str,
-    method: &str,
+    method: HttpMethod,
     path: &str,
     interaction_type: InteractionType,
     contextual_data: ContextualData,
@@ -164,18 +219,15 @@ pub async fn execute_tap_request_with_custom_nonce<T: Serialize>(
     let body = serde_json::to_vec(request_body)
         .map_err(|e| BridgeError::CryptoError(format!("request body serialization failed: {e}")))?;
 
-    let signature = signer.sign_request(method, authority, path, &body, interaction_type)?;
+    let signature =
+        signer.sign_request(method.as_str(), authority, path, &body, interaction_type)?;
 
+    let full_url = format!("{url}{path}");
     let request = match method {
-        "POST" => client.post(format!("{url}{path}")),
-        "GET" => client.get(format!("{url}{path}")),
-        "PUT" => client.put(format!("{url}{path}")),
-        "DELETE" => client.delete(format!("{url}{path}")),
-        _ => {
-            return Err(BridgeError::InvalidMerchantUrl(format!(
-                "unsupported HTTP method: {method}"
-            )));
-        }
+        HttpMethod::Get => client.get(&full_url),
+        HttpMethod::Post => client.post(&full_url),
+        HttpMethod::Put => client.put(&full_url),
+        HttpMethod::Delete => client.delete(&full_url),
     };
 
     let content_digest = TapSigner::compute_content_digest(&body);
@@ -306,5 +358,66 @@ mod tests {
     fn test_build_url_with_query_path_with_segments() {
         let path = build_url_with_query("/products/123", &[("consumer_id", "user-456")]).unwrap();
         assert_eq!(path, "/products/123?consumer_id=user-456");
+    }
+
+    // HttpMethod tests
+    #[test]
+    fn test_http_method_as_str() {
+        assert_eq!(HttpMethod::Get.as_str(), "GET");
+        assert_eq!(HttpMethod::Post.as_str(), "POST");
+        assert_eq!(HttpMethod::Put.as_str(), "PUT");
+        assert_eq!(HttpMethod::Delete.as_str(), "DELETE");
+    }
+
+    #[test]
+    fn test_http_method_eq() {
+        assert_eq!(HttpMethod::Get, HttpMethod::Get);
+        assert_ne!(HttpMethod::Get, HttpMethod::Post);
+    }
+
+    #[test]
+    fn test_http_method_clone() {
+        let method = HttpMethod::Post;
+        let cloned = method;
+        assert_eq!(method, cloned);
+    }
+
+    // validate_search_param tests
+    #[test]
+    fn test_validate_search_param_valid() {
+        assert!(validate_search_param("books", "search").is_ok());
+        assert!(validate_search_param("rust programming", "search").is_ok());
+        assert!(validate_search_param("A-Z 0-9 !@#$%", "category").is_ok());
+    }
+
+    #[test]
+    fn test_validate_search_param_empty() {
+        assert!(validate_search_param("", "search").is_ok());
+    }
+
+    #[test]
+    fn test_validate_search_param_max_length() {
+        let valid = "a".repeat(256);
+        assert!(validate_search_param(&valid, "search").is_ok());
+
+        let too_long = "a".repeat(257);
+        assert!(validate_search_param(&too_long, "search").is_err());
+    }
+
+    #[test]
+    fn test_validate_search_param_null_bytes() {
+        let with_null = "hello\0world";
+        let result = validate_search_param(with_null, "search");
+        assert!(result.is_err());
+        if let Err(BridgeError::InvalidInput(msg)) = result {
+            assert!(msg.contains("null bytes"));
+        }
+    }
+
+    #[test]
+    fn test_validate_search_param_non_ascii() {
+        // Non-printable ASCII should fail
+        let with_control = "hello\x01world";
+        assert!(validate_search_param(with_control, "search").is_err());
     }
 }
