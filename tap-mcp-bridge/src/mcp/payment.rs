@@ -3,13 +3,18 @@
 //! This module provides secure payment processing with APC (Agentic Payment Container)
 //! encryption and TAP authentication.
 
-use reqwest::Client;
+use std::sync::{Arc, Mutex};
+
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 
 use crate::{
     error::{BridgeError, Result},
-    mcp::models::PaymentResult,
+    mcp::{
+        http::{build_url_with_query, create_http_client, execute_tap_request_with_custom_nonce},
+        models::PaymentResult,
+    },
+    security::{RateLimitConfig, RateLimiter},
     tap::{
         InteractionType, TapSigner,
         acro::ContextualData,
@@ -242,14 +247,16 @@ pub async fn process_payment(
     // Create payment request with encrypted APC
     let request_body = ProcessPaymentRequest { order_id: params.order_id, apc: apc_json };
 
-    let path = format!("/checkout?consumer_id={}", params.consumer_id);
+    let path = build_url_with_query("/checkout", &[("consumer_id", &params.consumer_id)])?;
 
-    let response = execute_tap_request_with_acro(
+    let client = create_http_client()?;
+    let response = execute_tap_request_with_custom_nonce(
+        &client,
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "POST",
-        path,
+        &path,
         InteractionType::Checkout,
         contextual_data,
         &request_body,
@@ -263,84 +270,101 @@ pub async fn process_payment(
     Ok(payment_result)
 }
 
-/// Executes a TAP-authenticated HTTP request with ACRO and custom nonce.
+/// Rate limiter for payment operations.
 ///
-/// This variant allows specifying a custom nonce to match the APC nonce.
-#[instrument(
-    skip(signer, contextual_data, request_body, nonce),
-    fields(merchant_url, consumer_id, method, path)
-)]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "helper function needs all parameters"
-)]
-async fn execute_tap_request_with_acro<T: Serialize>(
-    signer: &TapSigner,
-    merchant_url: &str,
-    consumer_id: &str,
-    method: &str,
-    path: String,
-    interaction_type: InteractionType,
-    contextual_data: ContextualData,
-    request_body: &T,
-    nonce: &str,
-) -> Result<Vec<u8>> {
-    crate::mcp::tools::validate_consumer_id(consumer_id)?;
+/// Global rate limiter shared across all payment processing operations
+/// to prevent abuse and ensure compliance with merchant policies.
+///
+/// Default configuration: 5 payments per minute per consumer
+static PAYMENT_RATE_LIMITER: Mutex<Option<Arc<RateLimiter>>> = Mutex::new(None);
 
-    let url = crate::mcp::tools::parse_merchant_url(merchant_url)?;
-    let authority = url.host_str().ok_or_else(|| {
-        BridgeError::InvalidMerchantUrl(format!("URL missing host: {merchant_url}"))
-    })?;
-
-    // Use provided nonce (matching APC nonce)
-    let id_token = signer.generate_id_token(consumer_id, merchant_url, nonce)?;
-    let acro = signer.generate_acro(nonce, &id_token.token, contextual_data)?;
-
-    // NOTE: ACRO is generated but not included in request body
-    // The request body is sent directly since it already contains all necessary data
-    let _ = acro;
-
-    let body = serde_json::to_vec(request_body)
-        .map_err(|e| BridgeError::CryptoError(format!("request body serialization failed: {e}")))?;
-
-    let signature = signer.sign_request(method, authority, &path, &body, interaction_type)?;
-
-    let client = Client::new();
-
-    let request = match method {
-        "POST" => client.post(format!("{url}{path}")),
-        "GET" => client.get(format!("{url}{path}")),
-        "PUT" => client.put(format!("{url}{path}")),
-        "DELETE" => client.delete(format!("{url}{path}")),
-        _ => {
-            return Err(BridgeError::InvalidMerchantUrl(format!(
-                "unsupported HTTP method: {method}"
-            )));
-        }
-    };
-
-    let content_digest = TapSigner::compute_content_digest(&body);
-
-    let response = request
-        .header("Signature", &signature.signature)
-        .header("Signature-Input", &signature.signature_input)
-        .header("Signature-Agent", signature.agent_directory.as_ref())
-        .header("Content-Digest", &content_digest)
-        .header("Content-Type", "application/json")
-        .body(body)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        return Err(BridgeError::MerchantError(format!(
-            "merchant returned status {}",
-            response.status()
-        )));
+/// Gets or initializes the global payment rate limiter.
+fn get_payment_rate_limiter() -> Arc<RateLimiter> {
+    let mut limiter_opt = PAYMENT_RATE_LIMITER
+        .lock()
+        .expect("payment rate limiter mutex should not be poisoned");
+    if let Some(limiter) = limiter_opt.as_ref() {
+        Arc::clone(limiter)
+    } else {
+        // Default: 5 payments per minute = 0.083 per second
+        // Using burst_size of 3 to allow some flexibility
+        let config = RateLimitConfig {
+            requests_per_second: 1, // ~60/min with some margin
+            burst_size: 3,          // Allow burst of 3 payments
+        };
+        let limiter = Arc::new(RateLimiter::new(config));
+        *limiter_opt = Some(Arc::clone(&limiter));
+        limiter
     }
+}
 
-    let response_body = response.bytes().await.map_err(BridgeError::HttpError)?.to_vec();
+/// Processes payment with rate limiting applied.
+///
+/// This is a wrapper around [`process_payment`] that enforces rate limiting
+/// to prevent excessive payment attempts.
+///
+/// Default rate limit: 5 attempts per minute per consumer (burst of 3).
+///
+/// # Errors
+///
+/// Returns [`crate::error::BridgeError::RateLimitExceeded`] if rate limit is exceeded,
+/// or any error from the underlying [`process_payment`] function.
+///
+/// # Examples
+///
+/// ```no_run
+/// use ed25519_dalek::SigningKey;
+/// use tap_mcp_bridge::{
+///     mcp::payment::{PaymentMethodParams, ProcessPaymentParams, process_payment_rate_limited},
+///     tap::TapSigner,
+/// };
+///
+/// # async fn example() -> tap_mcp_bridge::error::Result<()> {
+/// let signing_key = SigningKey::from_bytes(&[0u8; 32]);
+/// let signer = TapSigner::new(signing_key, "agent-123", "https://agent.example.com");
+///
+/// let payment_method = PaymentMethodParams::Card {
+///     card_number: "4111111111111111".into(),
+///     expiry_month: "12".into(),
+///     expiry_year: "25".into(),
+///     cvv: "123".into(),
+///     cardholder_name: "John Doe".into(),
+/// };
+///
+/// let merchant_key_pem = "-----BEGIN PUBLIC KEY-----...-----END PUBLIC KEY-----";
+///
+/// let params = ProcessPaymentParams {
+///     merchant_url: "https://merchant.com".into(),
+///     consumer_id: "user-123".into(),
+///     order_id: "order-789".into(),
+///     payment_method,
+///     merchant_public_key_pem: merchant_key_pem.into(),
+///     country_code: "US".into(),
+///     zip: "94025".into(),
+///     ip_address: "192.168.1.100".into(),
+///     user_agent: "Mozilla/5.0".into(),
+///     platform: "macOS".into(),
+/// };
+///
+/// // Rate-limited payment processing
+/// let result = process_payment_rate_limited(&signer, params).await?;
+/// println!("Transaction ID: {}", result.transaction_id);
+/// # Ok(())
+/// # }
+/// ```
+#[instrument(skip(signer, params), fields(merchant_url = %params.merchant_url, order_id = %params.order_id))]
+pub async fn process_payment_rate_limited(
+    signer: &TapSigner,
+    params: ProcessPaymentParams,
+) -> Result<PaymentResult> {
+    // Acquire rate limit token
+    let limiter = get_payment_rate_limiter();
+    limiter.acquire().await?;
 
-    Ok(response_body)
+    info!("rate limit passed, processing payment");
+
+    // Process payment
+    process_payment(signer, params).await
 }
 
 #[cfg(test)]

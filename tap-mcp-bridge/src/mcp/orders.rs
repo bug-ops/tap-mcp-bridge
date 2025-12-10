@@ -3,13 +3,15 @@
 //! This module provides functions for creating and retrieving orders
 //! with TAP authentication.
 
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 
 use crate::{
-    error::{BridgeError, Result},
-    mcp::models::{Address, Order},
+    error::Result,
+    mcp::{
+        http::{build_url_with_query, create_http_client, execute_tap_request_with_acro},
+        models::{Address, Order},
+    },
     tap::{InteractionType, TapSigner, acro::ContextualData},
 };
 
@@ -158,22 +160,25 @@ pub async fn create_order(signer: &TapSigner, params: CreateOrderParams) -> Resu
         promo_code: params.promo_code,
     };
 
-    let path = format!("/orders?consumer_id={}", params.consumer_id);
+    let path = build_url_with_query("/orders", &[("consumer_id", &params.consumer_id)])?;
 
+    let client = create_http_client()?;
     let response = execute_tap_request_with_acro(
+        &client,
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "POST",
-        path,
+        &path,
         InteractionType::Checkout,
         contextual_data,
-        &request_body,
+        Some(&request_body),
     )
     .await?;
 
-    let order: Order = serde_json::from_slice(&response)
-        .map_err(|e| BridgeError::MerchantError(format!("failed to parse order: {e}")))?;
+    let order: Order = serde_json::from_slice(&response).map_err(|e| {
+        crate::error::BridgeError::MerchantError(format!("failed to parse order: {e}"))
+    })?;
 
     Ok(order)
 }
@@ -227,164 +232,30 @@ pub async fn get_order(signer: &TapSigner, params: GetOrderParams) -> Result<Ord
         },
     };
 
-    let path = format!("/orders/{}?consumer_id={}", params.order_id, params.consumer_id);
+    let path = build_url_with_query(&format!("/orders/{}", params.order_id), &[(
+        "consumer_id",
+        &params.consumer_id,
+    )])?;
 
-    let response = execute_tap_request_with_acro_no_body(
+    let client = create_http_client()?;
+    let response = execute_tap_request_with_acro(
+        &client,
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "GET",
-        path,
+        &path,
         InteractionType::Browse,
         contextual_data,
+        None::<&()>,
     )
     .await?;
 
-    let order: Order = serde_json::from_slice(&response)
-        .map_err(|e| BridgeError::MerchantError(format!("failed to parse order: {e}")))?;
+    let order: Order = serde_json::from_slice(&response).map_err(|e| {
+        crate::error::BridgeError::MerchantError(format!("failed to parse order: {e}"))
+    })?;
 
     Ok(order)
-}
-
-/// Executes a TAP-authenticated HTTP request with ACRO and request body.
-#[instrument(
-    skip(signer, contextual_data, request_body),
-    fields(merchant_url, consumer_id, method, path)
-)]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "helper function needs all parameters"
-)]
-async fn execute_tap_request_with_acro<T: Serialize>(
-    signer: &TapSigner,
-    merchant_url: &str,
-    consumer_id: &str,
-    method: &str,
-    path: String,
-    interaction_type: InteractionType,
-    contextual_data: ContextualData,
-    request_body: &T,
-) -> Result<Vec<u8>> {
-    crate::mcp::tools::validate_consumer_id(consumer_id)?;
-
-    let url = crate::mcp::tools::parse_merchant_url(merchant_url)?;
-    let authority = url.host_str().ok_or_else(|| {
-        BridgeError::InvalidMerchantUrl(format!("URL missing host: {merchant_url}"))
-    })?;
-
-    let nonce = uuid::Uuid::new_v4().to_string();
-    let id_token = signer.generate_id_token(consumer_id, merchant_url, &nonce)?;
-    let _acro = signer.generate_acro(&nonce, &id_token.token, contextual_data)?;
-
-    let body = serde_json::to_vec(request_body)
-        .map_err(|e| BridgeError::CryptoError(format!("request body serialization failed: {e}")))?;
-
-    let signature = signer.sign_request(method, authority, &path, &body, interaction_type)?;
-
-    let client = Client::new();
-
-    let request = match method {
-        "POST" => client.post(format!("{url}{path}")),
-        "GET" => client.get(format!("{url}{path}")),
-        "PUT" => client.put(format!("{url}{path}")),
-        "DELETE" => client.delete(format!("{url}{path}")),
-        _ => {
-            return Err(BridgeError::InvalidMerchantUrl(format!(
-                "unsupported HTTP method: {method}"
-            )));
-        }
-    };
-
-    let content_digest = TapSigner::compute_content_digest(&body);
-
-    let response = request
-        .header("Signature", &signature.signature)
-        .header("Signature-Input", &signature.signature_input)
-        .header("Signature-Agent", signature.agent_directory.as_ref())
-        .header("Content-Digest", &content_digest)
-        .header("Content-Type", "application/json")
-        .body(body)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        return Err(BridgeError::MerchantError(format!(
-            "merchant returned status {}",
-            response.status()
-        )));
-    }
-
-    let response_body = response.bytes().await.map_err(BridgeError::HttpError)?.to_vec();
-
-    Ok(response_body)
-}
-
-/// Executes a TAP-authenticated HTTP request with ACRO, no additional body.
-#[instrument(
-    skip(signer, contextual_data),
-    fields(merchant_url, consumer_id, method, path)
-)]
-async fn execute_tap_request_with_acro_no_body(
-    signer: &TapSigner,
-    merchant_url: &str,
-    consumer_id: &str,
-    method: &str,
-    path: String,
-    interaction_type: InteractionType,
-    contextual_data: ContextualData,
-) -> Result<Vec<u8>> {
-    crate::mcp::tools::validate_consumer_id(consumer_id)?;
-
-    let url = crate::mcp::tools::parse_merchant_url(merchant_url)?;
-    let authority = url.host_str().ok_or_else(|| {
-        BridgeError::InvalidMerchantUrl(format!("URL missing host: {merchant_url}"))
-    })?;
-
-    let nonce = uuid::Uuid::new_v4().to_string();
-    let id_token = signer.generate_id_token(consumer_id, merchant_url, &nonce)?;
-    let acro = signer.generate_acro(&nonce, &id_token.token, contextual_data)?;
-
-    let body = serde_json::to_vec(&acro)
-        .map_err(|e| BridgeError::CryptoError(format!("ACRO serialization failed: {e}")))?;
-
-    let signature = signer.sign_request(method, authority, &path, &body, interaction_type)?;
-
-    let client = Client::new();
-
-    let request = match method {
-        "POST" => client.post(format!("{url}{path}")),
-        "GET" => client.get(format!("{url}{path}")),
-        "PUT" => client.put(format!("{url}{path}")),
-        "DELETE" => client.delete(format!("{url}{path}")),
-        _ => {
-            return Err(BridgeError::InvalidMerchantUrl(format!(
-                "unsupported HTTP method: {method}"
-            )));
-        }
-    };
-
-    let content_digest = TapSigner::compute_content_digest(&body);
-
-    let response = request
-        .header("Signature", &signature.signature)
-        .header("Signature-Input", &signature.signature_input)
-        .header("Signature-Agent", signature.agent_directory.as_ref())
-        .header("Content-Digest", &content_digest)
-        .header("Content-Type", "application/json")
-        .body(body)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        return Err(BridgeError::MerchantError(format!(
-            "merchant returned status {}",
-            response.status()
-        )));
-    }
-
-    let response_body = response.bytes().await.map_err(BridgeError::HttpError)?.to_vec();
-
-    Ok(response_body)
 }
 
 #[cfg(test)]

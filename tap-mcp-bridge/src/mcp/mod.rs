@@ -75,6 +75,7 @@
 //! ```
 
 pub mod cart;
+pub mod http;
 pub mod models;
 pub mod orders;
 pub mod payment;

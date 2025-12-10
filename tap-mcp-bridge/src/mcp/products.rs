@@ -3,13 +3,15 @@
 //! This module provides functions for browsing merchant product catalogs
 //! with TAP authentication.
 
-use reqwest::Client;
 use serde::Deserialize;
 use tracing::{info, instrument};
 
 use crate::{
-    error::{BridgeError, Result},
-    mcp::models::{Product, ProductCatalog},
+    error::Result,
+    mcp::{
+        http::{build_url_with_query, create_http_client, execute_tap_request_with_acro},
+        models::{Product, ProductCatalog},
+    },
     tap::{InteractionType, TapSigner, acro::ContextualData},
 };
 
@@ -129,40 +131,47 @@ pub async fn get_products(signer: &TapSigner, params: GetProductsParams) -> Resu
         },
     };
 
-    // Build query parameters
-    let mut query_params = vec![("consumer_id".to_owned(), params.consumer_id.clone())];
-    if let Some(category) = params.category {
-        query_params.push(("category".to_owned(), category));
+    // Build query parameters with proper URL encoding
+    let mut query_params = vec![("consumer_id", params.consumer_id.as_str())];
+
+    let category_str;
+    if let Some(ref category) = params.category {
+        category_str = category.as_str();
+        query_params.push(("category", category_str));
     }
-    if let Some(search) = params.search {
-        query_params.push(("search".to_owned(), search));
+
+    let search_str;
+    if let Some(ref search) = params.search {
+        search_str = search.as_str();
+        query_params.push(("search", search_str));
     }
+
     let page = params.page.unwrap_or(1);
     let per_page = params.per_page.unwrap_or(20);
-    query_params.push(("page".to_owned(), page.to_string()));
-    query_params.push(("per_page".to_owned(), per_page.to_string()));
+    let page_str = page.to_string();
+    let per_page_str = per_page.to_string();
+    query_params.push(("page", &page_str));
+    query_params.push(("per_page", &per_page_str));
 
-    let query_string = query_params
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join("&");
+    let path = build_url_with_query("/products", &query_params)?;
 
-    let path = format!("/products?{query_string}");
-
+    let client = create_http_client()?;
     let response = execute_tap_request_with_acro(
+        &client,
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "GET",
-        path,
+        &path,
         InteractionType::Browse,
         contextual_data,
+        None::<&()>,
     )
     .await?;
 
-    let catalog: ProductCatalogResponse = serde_json::from_slice(&response)
-        .map_err(|e| BridgeError::MerchantError(format!("failed to parse catalog: {e}")))?;
+    let catalog: ProductCatalogResponse = serde_json::from_slice(&response).map_err(|e| {
+        crate::error::BridgeError::MerchantError(format!("failed to parse catalog: {e}"))
+    })?;
 
     Ok(ProductCatalog {
         products: catalog.products,
@@ -221,92 +230,30 @@ pub async fn get_product(signer: &TapSigner, params: GetProductParams) -> Result
         },
     };
 
-    let path = format!("/products/{}?consumer_id={}", params.product_id, params.consumer_id);
+    let path = build_url_with_query(&format!("/products/{}", params.product_id), &[(
+        "consumer_id",
+        &params.consumer_id,
+    )])?;
 
+    let client = create_http_client()?;
     let response = execute_tap_request_with_acro(
+        &client,
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "GET",
-        path,
+        &path,
         InteractionType::Browse,
         contextual_data,
+        None::<&()>,
     )
     .await?;
 
-    let product: Product = serde_json::from_slice(&response)
-        .map_err(|e| BridgeError::MerchantError(format!("failed to parse product: {e}")))?;
-
-    Ok(product)
-}
-
-/// Executes a TAP-authenticated HTTP request with ACRO and returns response body.
-///
-/// This is a helper function that reuses the pattern from tools.rs but returns
-/// the response body for parsing.
-#[instrument(
-    skip(signer, contextual_data),
-    fields(merchant_url, consumer_id, method, path)
-)]
-async fn execute_tap_request_with_acro(
-    signer: &TapSigner,
-    merchant_url: &str,
-    consumer_id: &str,
-    method: &str,
-    path: String,
-    interaction_type: InteractionType,
-    contextual_data: ContextualData,
-) -> Result<Vec<u8>> {
-    crate::mcp::tools::validate_consumer_id(consumer_id)?;
-
-    let url = crate::mcp::tools::parse_merchant_url(merchant_url)?;
-    let authority = url.host_str().ok_or_else(|| {
-        BridgeError::InvalidMerchantUrl(format!("URL missing host: {merchant_url}"))
+    let product: Product = serde_json::from_slice(&response).map_err(|e| {
+        crate::error::BridgeError::MerchantError(format!("failed to parse product: {e}"))
     })?;
 
-    let nonce = uuid::Uuid::new_v4().to_string();
-    let id_token = signer.generate_id_token(consumer_id, merchant_url, &nonce)?;
-    let acro = signer.generate_acro(&nonce, &id_token.token, contextual_data)?;
-
-    let body = serde_json::to_vec(&acro)
-        .map_err(|e| BridgeError::CryptoError(format!("ACRO serialization failed: {e}")))?;
-
-    let signature = signer.sign_request(method, authority, &path, &body, interaction_type)?;
-
-    let client = Client::new();
-
-    let request = match method {
-        "POST" => client.post(format!("{url}{path}")),
-        "GET" => client.get(format!("{url}{path}")),
-        _ => {
-            return Err(BridgeError::InvalidMerchantUrl(format!(
-                "unsupported HTTP method: {method}"
-            )));
-        }
-    };
-
-    let content_digest = TapSigner::compute_content_digest(&body);
-
-    let response = request
-        .header("Signature", &signature.signature)
-        .header("Signature-Input", &signature.signature_input)
-        .header("Signature-Agent", signature.agent_directory.as_ref())
-        .header("Content-Digest", &content_digest)
-        .header("Content-Type", "application/json")
-        .body(body)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        return Err(BridgeError::MerchantError(format!(
-            "merchant returned status {}",
-            response.status()
-        )));
-    }
-
-    let response_body = response.bytes().await.map_err(BridgeError::HttpError)?.to_vec();
-
-    Ok(response_body)
+    Ok(product)
 }
 
 #[cfg(test)]

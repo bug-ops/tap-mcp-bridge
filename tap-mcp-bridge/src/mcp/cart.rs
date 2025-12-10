@@ -3,13 +3,15 @@
 //! This module provides functions for managing shopping cart operations
 //! with TAP authentication.
 
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 
 use crate::{
-    error::{BridgeError, Result},
-    mcp::models::CartState,
+    error::Result,
+    mcp::{
+        http::{build_url_with_query, create_http_client, execute_tap_request_with_acro},
+        models::CartState,
+    },
     tap::{InteractionType, TapSigner, acro::ContextualData},
 };
 
@@ -160,22 +162,25 @@ pub async fn add_to_cart(signer: &TapSigner, params: AddToCartParams) -> Result<
         quantity: params.quantity,
     };
 
-    let path = format!("/cart/add?consumer_id={}", params.consumer_id);
+    let path = build_url_with_query("/cart/add", &[("consumer_id", &params.consumer_id)])?;
 
+    let client = create_http_client()?;
     let response = execute_tap_request_with_acro(
+        &client,
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "POST",
-        path,
+        &path,
         InteractionType::Checkout,
         contextual_data,
         Some(&request_body),
     )
     .await?;
 
-    let cart: CartState = serde_json::from_slice(&response)
-        .map_err(|e| BridgeError::MerchantError(format!("failed to parse cart state: {e}")))?;
+    let cart: CartState = serde_json::from_slice(&response).map_err(|e| {
+        crate::error::BridgeError::MerchantError(format!("failed to parse cart state: {e}"))
+    })?;
 
     Ok(cart)
 }
@@ -199,22 +204,28 @@ pub async fn get_cart(signer: &TapSigner, params: GetCartParams) -> Result<CartS
         },
     };
 
-    let path = format!("/cart?cart_id={}&consumer_id={}", params.cart_id, params.consumer_id);
+    let path = build_url_with_query("/cart", &[
+        ("cart_id", &params.cart_id),
+        ("consumer_id", &params.consumer_id),
+    ])?;
 
+    let client = create_http_client()?;
     let response = execute_tap_request_with_acro(
+        &client,
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "GET",
-        path,
+        &path,
         InteractionType::Browse,
         contextual_data,
         None::<&()>,
     )
     .await?;
 
-    let cart: CartState = serde_json::from_slice(&response)
-        .map_err(|e| BridgeError::MerchantError(format!("failed to parse cart state: {e}")))?;
+    let cart: CartState = serde_json::from_slice(&response).map_err(|e| {
+        crate::error::BridgeError::MerchantError(format!("failed to parse cart state: {e}"))
+    })?;
 
     Ok(cart)
 }
@@ -243,22 +254,28 @@ pub async fn update_cart_item(
 
     let request_body = UpdateCartItemRequest { quantity: params.quantity };
 
-    let path = format!("/cart/items/{}?consumer_id={}", params.item_id, params.consumer_id);
+    let path = build_url_with_query(&format!("/cart/items/{}", params.item_id), &[(
+        "consumer_id",
+        &params.consumer_id,
+    )])?;
 
+    let client = create_http_client()?;
     let response = execute_tap_request_with_acro(
+        &client,
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "PUT",
-        path,
+        &path,
         InteractionType::Checkout,
         contextual_data,
         Some(&request_body),
     )
     .await?;
 
-    let cart: CartState = serde_json::from_slice(&response)
-        .map_err(|e| BridgeError::MerchantError(format!("failed to parse cart state: {e}")))?;
+    let cart: CartState = serde_json::from_slice(&response).map_err(|e| {
+        crate::error::BridgeError::MerchantError(format!("failed to parse cart state: {e}"))
+    })?;
 
     Ok(cart)
 }
@@ -285,103 +302,30 @@ pub async fn remove_from_cart(
         },
     };
 
-    let path = format!("/cart/items/{}?consumer_id={}", params.item_id, params.consumer_id);
+    let path = build_url_with_query(&format!("/cart/items/{}", params.item_id), &[(
+        "consumer_id",
+        &params.consumer_id,
+    )])?;
 
+    let client = create_http_client()?;
     let response = execute_tap_request_with_acro(
+        &client,
         signer,
         &params.merchant_url,
         &params.consumer_id,
         "DELETE",
-        path,
+        &path,
         InteractionType::Checkout,
         contextual_data,
         None::<&()>,
     )
     .await?;
 
-    let cart: CartState = serde_json::from_slice(&response)
-        .map_err(|e| BridgeError::MerchantError(format!("failed to parse cart state: {e}")))?;
-
-    Ok(cart)
-}
-
-/// Executes a TAP-authenticated HTTP request with ACRO and optional request body.
-#[instrument(
-    skip(signer, contextual_data, request_body),
-    fields(merchant_url, consumer_id, method, path)
-)]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "helper function needs all parameters"
-)]
-async fn execute_tap_request_with_acro<T: Serialize>(
-    signer: &TapSigner,
-    merchant_url: &str,
-    consumer_id: &str,
-    method: &str,
-    path: String,
-    interaction_type: InteractionType,
-    contextual_data: ContextualData,
-    request_body: Option<&T>,
-) -> Result<Vec<u8>> {
-    crate::mcp::tools::validate_consumer_id(consumer_id)?;
-
-    let url = crate::mcp::tools::parse_merchant_url(merchant_url)?;
-    let authority = url.host_str().ok_or_else(|| {
-        BridgeError::InvalidMerchantUrl(format!("URL missing host: {merchant_url}"))
+    let cart: CartState = serde_json::from_slice(&response).map_err(|e| {
+        crate::error::BridgeError::MerchantError(format!("failed to parse cart state: {e}"))
     })?;
 
-    let nonce = uuid::Uuid::new_v4().to_string();
-    let id_token = signer.generate_id_token(consumer_id, merchant_url, &nonce)?;
-    let acro = signer.generate_acro(&nonce, &id_token.token, contextual_data)?;
-
-    let body = if let Some(req_body) = request_body {
-        serde_json::to_vec(req_body).map_err(|e| {
-            BridgeError::CryptoError(format!("request body serialization failed: {e}"))
-        })?
-    } else {
-        serde_json::to_vec(&acro)
-            .map_err(|e| BridgeError::CryptoError(format!("ACRO serialization failed: {e}")))?
-    };
-
-    let signature = signer.sign_request(method, authority, &path, &body, interaction_type)?;
-
-    let client = Client::new();
-
-    let request = match method {
-        "POST" => client.post(format!("{url}{path}")),
-        "GET" => client.get(format!("{url}{path}")),
-        "PUT" => client.put(format!("{url}{path}")),
-        "DELETE" => client.delete(format!("{url}{path}")),
-        _ => {
-            return Err(BridgeError::InvalidMerchantUrl(format!(
-                "unsupported HTTP method: {method}"
-            )));
-        }
-    };
-
-    let content_digest = TapSigner::compute_content_digest(&body);
-
-    let response = request
-        .header("Signature", &signature.signature)
-        .header("Signature-Input", &signature.signature_input)
-        .header("Signature-Agent", signature.agent_directory.as_ref())
-        .header("Content-Digest", &content_digest)
-        .header("Content-Type", "application/json")
-        .body(body)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        return Err(BridgeError::MerchantError(format!(
-            "merchant returned status {}",
-            response.status()
-        )));
-    }
-
-    let response_body = response.bytes().await.map_err(BridgeError::HttpError)?.to_vec();
-
-    Ok(response_body)
+    Ok(cart)
 }
 
 #[cfg(test)]
