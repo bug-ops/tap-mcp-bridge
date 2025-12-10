@@ -3,6 +3,8 @@
 //! This module provides functions for browsing merchant product catalogs
 //! with TAP authentication.
 
+use std::sync::OnceLock;
+
 use serde::Deserialize;
 use tracing::{info, instrument};
 
@@ -15,8 +17,17 @@ use crate::{
         },
         models::{Product, ProductCatalog},
     },
+    merchant::{DefaultMerchant, MerchantApi},
     tap::{InteractionType, TapSigner, acro::ContextualData},
 };
+
+/// Singleton instance of the default merchant to avoid repeated allocations.
+static DEFAULT_MERCHANT: OnceLock<DefaultMerchant> = OnceLock::new();
+
+/// Returns a reference to the singleton default merchant instance.
+fn default_merchant() -> &'static DefaultMerchant {
+    DEFAULT_MERCHANT.get_or_init(DefaultMerchant::new)
+}
 
 /// Parameters for getting product catalog.
 #[derive(Debug, Deserialize)]
@@ -84,6 +95,9 @@ struct ProductCatalogResponse {
 
 /// Retrieves product catalog from merchant with TAP authentication.
 ///
+/// This is a convenience wrapper that uses `DefaultMerchant` with standard
+/// TAP conventions. For custom merchant configurations, use `get_products_with`.
+///
 /// # Errors
 ///
 /// Returns error if signature generation, HTTP request, or response parsing fails.
@@ -120,8 +134,21 @@ struct ProductCatalogResponse {
 /// # Ok(())
 /// # }
 /// ```
-#[instrument(skip(signer, params), fields(merchant_url = %params.merchant_url, consumer_id = %params.consumer_id))]
 pub async fn get_products(signer: &TapSigner, params: GetProductsParams) -> Result<ProductCatalog> {
+    get_products_with(signer, default_merchant(), params).await
+}
+
+/// Retrieves product catalog using a specific merchant configuration.
+///
+/// # Errors
+///
+/// Returns error if signature generation, HTTP request, or response parsing fails.
+#[instrument(skip(signer, _merchant, params), fields(merchant_url = %params.merchant_url, consumer_id = %params.consumer_id))]
+pub async fn get_products_with<M: MerchantApi>(
+    signer: &TapSigner,
+    _merchant: &M,
+    params: GetProductsParams,
+) -> Result<ProductCatalog> {
     info!("fetching product catalog");
 
     let contextual_data = ContextualData {
@@ -180,6 +207,9 @@ pub async fn get_products(signer: &TapSigner, params: GetProductsParams) -> Resu
     )
     .await?;
 
+    // Note: For now, we're using the standard response format since DefaultMerchant
+    // uses identity conversion. Custom merchant implementations can deserialize
+    // their own format and convert via to_standard_catalog.
     let catalog: ProductCatalogResponse = serde_json::from_slice(&response).map_err(|e| {
         crate::error::BridgeError::MerchantError(format!("failed to parse catalog: {e}"))
     })?;
@@ -193,6 +223,9 @@ pub async fn get_products(signer: &TapSigner, params: GetProductsParams) -> Resu
 }
 
 /// Retrieves a single product from merchant with TAP authentication.
+///
+/// This is a convenience wrapper that uses `DefaultMerchant` with standard
+/// TAP conventions. For custom merchant configurations, use `get_product_with`.
 ///
 /// # Errors
 ///
@@ -227,8 +260,21 @@ pub async fn get_products(signer: &TapSigner, params: GetProductsParams) -> Resu
 /// # Ok(())
 /// # }
 /// ```
-#[instrument(skip(signer, params), fields(merchant_url = %params.merchant_url, product_id = %params.product_id))]
 pub async fn get_product(signer: &TapSigner, params: GetProductParams) -> Result<Product> {
+    get_product_with(signer, default_merchant(), params).await
+}
+
+/// Retrieves a single product using a specific merchant configuration.
+///
+/// # Errors
+///
+/// Returns error if signature generation, HTTP request, or response parsing fails.
+#[instrument(skip(signer, _merchant, params), fields(merchant_url = %params.merchant_url, product_id = %params.product_id))]
+pub async fn get_product_with<M: MerchantApi>(
+    signer: &TapSigner,
+    _merchant: &M,
+    params: GetProductParams,
+) -> Result<Product> {
     info!("fetching product details");
 
     let contextual_data = ContextualData {

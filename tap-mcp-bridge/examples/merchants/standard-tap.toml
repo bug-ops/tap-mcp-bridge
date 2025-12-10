@@ -1,0 +1,67 @@
+# Standard TAP Merchant Configuration
+#
+# This is the default configuration for merchants following
+# the standard TAP (Trusted Agent Protocol) API specification.
+#
+# Use this as a template for custom merchant configurations.
+
+name = "Standard TAP Merchant"
+base_url = "https://api.example-merchant.com"
+
+# Optional API prefix (prepended to all endpoints)
+# api_prefix = "/api/v1"
+
+# Endpoint Configuration
+# All endpoints are optional - defaults shown below
+[endpoints]
+products = "/products"
+product = "/products/{id}"
+cart = "/cart"
+add_to_cart = "/cart/add"
+cart_item = "/cart/items/{id}"
+orders = "/orders"
+order = "/orders/{id}"
+checkout = "/checkout"
+
+# Field Mappings
+# Map standard TAP field names to merchant-specific names
+# Leave empty for standard TAP field names
+[field_mappings]
+# Request field mappings (standard -> merchant)
+[field_mappings.request]
+# consumer_id = "consumer_id"
+# product_id = "product_id"
+# cart_id = "cart_id"
+# quantity = "quantity"
+
+# Response field mappings (merchant -> standard)
+[field_mappings.response]
+# id = "id"
+# name = "name"
+# price = "price"
+# items = "items"
+
+# Pagination Style
+# Options: page_based (default), offset_based, cursor_based
+pagination = "page_based"
+
+# Authentication (optional)
+# Supported types: api_key, bearer, oauth2
+
+# Example: API Key authentication
+# [auth]
+# type = "api_key"
+# header = "X-API-Key"
+# env_var = "TAP_MERCHANT_API_KEY"
+
+# Example: Bearer token authentication
+# [auth]
+# type = "bearer"
+# env_var = "TAP_MERCHANT_TOKEN"
+
+# Example: OAuth2 client credentials
+# [auth]
+# type = "oauth2"
+# token_url = "https://auth.example-merchant.com/oauth/token"
+# client_id_env = "TAP_OAUTH_CLIENT_ID"
+# client_secret_env = "TAP_OAUTH_CLIENT_SECRET"

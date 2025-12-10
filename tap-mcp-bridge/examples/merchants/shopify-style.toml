@@ -1,0 +1,42 @@
+# Shopify-Style Merchant Configuration
+#
+# Example configuration for merchants using Shopify-like API conventions.
+# Uses GraphQL-style naming and cursor-based pagination.
+
+name = "Shopify-Style Store"
+base_url = "https://mystore.myshopify.com"
+api_prefix = "/admin/api/2024-01"
+
+[endpoints]
+products = "/products.json"
+product = "/products/{id}.json"
+cart = "/checkouts"
+add_to_cart = "/checkouts"
+cart_item = "/checkouts/{id}/line_items"
+orders = "/orders.json"
+order = "/orders/{id}.json"
+checkout = "/checkouts/{id}/complete"
+
+[field_mappings.request]
+consumer_id = "customer_id"
+product_id = "variant_id"
+cart_id = "checkout_token"
+quantity = "quantity"
+
+[field_mappings.response]
+customer_id = "consumer_id"
+variant_id = "product_id"
+checkout_token = "cart_id"
+line_items = "items"
+total_price = "total"
+subtotal_price = "subtotal"
+total_tax = "tax"
+created_at = "created_at"
+
+# Shopify uses cursor-based pagination
+pagination = "cursor_based"
+
+# Shopify requires OAuth2 or private app token
+[auth]
+type = "bearer"
+env_var = "SHOPIFY_ACCESS_TOKEN"

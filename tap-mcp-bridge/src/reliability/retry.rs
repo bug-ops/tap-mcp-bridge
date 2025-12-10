@@ -252,6 +252,10 @@ pub fn is_retryable(error: &BridgeError) -> bool {
         | BridgeError::InvalidInput(_) => false,
         // Don't retry merchant protocol errors
         BridgeError::MerchantError(_) => false,
+        // Don't retry merchant configuration errors
+        BridgeError::MerchantConfigError(_)
+        | BridgeError::FieldMappingError(_)
+        | BridgeError::TransformationError(_) => false,
         // Don't retry security errors
         BridgeError::ReplayAttack | BridgeError::RequestTooOld(_) => false,
         // Don't retry rate limit errors (should implement backoff instead)

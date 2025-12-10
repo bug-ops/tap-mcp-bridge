@@ -245,5 +245,23 @@ fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, Br
             eprintln!("   → Fix: Check input parameter constraints");
             eprintln!("   → Fix: Ensure no null bytes or invalid characters");
         }
+
+        Err(BridgeError::MerchantConfigError(msg)) => {
+            eprintln!("   ✗ Merchant configuration error: {msg}");
+            eprintln!("   → Fix: Check merchant configuration TOML file");
+            eprintln!("   → Fix: Verify all required fields are present");
+        }
+
+        Err(BridgeError::FieldMappingError(msg)) => {
+            eprintln!("   ✗ Field mapping error: {msg}");
+            eprintln!("   → Fix: Check field mapping configuration");
+            eprintln!("   → Fix: Ensure mappings match actual API fields");
+        }
+
+        Err(BridgeError::TransformationError(msg)) => {
+            eprintln!("   ✗ Response transformation error: {msg}");
+            eprintln!("   → Fix: Check merchant response format");
+            eprintln!("   → Fix: Verify custom transformers are correct");
+        }
     }
 }
