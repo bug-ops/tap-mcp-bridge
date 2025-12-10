@@ -3,20 +3,18 @@
 //! This module provides HTTP/1.1 and HTTP/2 transport using reqwest.
 //! All requests are TAP-signed per RFC 9421.
 
-use std::sync::LazyLock;
-use std::time::Duration;
+use std::{sync::LazyLock, time::Duration};
 
 use reqwest::Client;
 use tracing::instrument;
 use url::Url;
 
+use super::config::{HttpConfig, HttpVersion};
 use crate::{
     error::{BridgeError, Result},
     tap::TapSigner,
-    transport::{sealed, RequestContext, Transport, TransportResponse},
+    transport::{RequestContext, Transport, TransportResponse, sealed},
 };
-
-use super::config::{HttpConfig, HttpVersion};
 
 /// Default HTTP client with connection pooling enabled.
 ///
@@ -86,9 +84,11 @@ fn validate_header(name: &str, value: &str) -> Result<()> {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use tap_mcp_bridge::transport::{HttpTransport, RequestContext};
-/// use tap_mcp_bridge::tap::{TapSigner, InteractionType};
 /// use ed25519_dalek::SigningKey;
+/// use tap_mcp_bridge::{
+///     tap::{InteractionType, TapSigner},
+///     transport::{HttpTransport, RequestContext},
+/// };
 ///
 /// # async fn example() -> tap_mcp_bridge::error::Result<()> {
 /// // Create transport with default config
@@ -155,7 +155,7 @@ impl HttpTransport {
     /// # Examples
     ///
     /// ```
-    /// use tap_mcp_bridge::transport::{HttpTransport, HttpConfig, HttpVersion};
+    /// use tap_mcp_bridge::transport::{HttpConfig, HttpTransport, HttpVersion};
     ///
     /// let config = HttpConfig {
     ///     pool_max_idle_per_host: 20,
@@ -219,7 +219,8 @@ impl HttpTransport {
         })?;
 
         let body_bytes = body.unwrap_or(&[]);
-        let signature = signer.sign_request(method, authority, path, body_bytes, ctx.interaction_type)?;
+        let signature =
+            signer.sign_request(method, authority, path, body_bytes, ctx.interaction_type)?;
 
         let full_url = format!("{}{path}", ctx.base_url.trim_end_matches('/'));
 
@@ -229,7 +230,9 @@ impl HttpTransport {
             "PUT" => self.client.put(&full_url),
             "DELETE" => self.client.delete(&full_url),
             _ => {
-                return Err(BridgeError::InvalidInput(format!("unsupported HTTP method: {method}")))
+                return Err(BridgeError::InvalidInput(format!(
+                    "unsupported HTTP method: {method}"
+                )));
             }
         };
 
@@ -325,9 +328,8 @@ impl Transport for HttpTransport {
 mod tests {
     use ed25519_dalek::SigningKey;
 
-    use crate::tap::InteractionType;
-
     use super::*;
+    use crate::tap::InteractionType;
 
     #[test]
     fn test_http_transport_new() {
@@ -354,26 +356,17 @@ mod tests {
 
     #[test]
     fn test_http_transport_protocol_name() {
-        let config_http1 = HttpConfig {
-            http_version: HttpVersion::Http1,
-            ..Default::default()
-        };
+        let config_http1 = HttpConfig { http_version: HttpVersion::Http1, ..Default::default() };
         let transport_http1 = HttpTransport::with_config(&config_http1).unwrap();
         assert_eq!(transport_http1.protocol_name(), "http/1.1");
         assert!(!transport_http1.supports_streaming());
 
-        let config_http2 = HttpConfig {
-            http_version: HttpVersion::Http2,
-            ..Default::default()
-        };
+        let config_http2 = HttpConfig { http_version: HttpVersion::Http2, ..Default::default() };
         let transport_http2 = HttpTransport::with_config(&config_http2).unwrap();
         assert_eq!(transport_http2.protocol_name(), "http/2");
         assert!(transport_http2.supports_streaming());
 
-        let config_auto = HttpConfig {
-            http_version: HttpVersion::Auto,
-            ..Default::default()
-        };
+        let config_auto = HttpConfig { http_version: HttpVersion::Auto, ..Default::default() };
         let transport_auto = HttpTransport::with_config(&config_auto).unwrap();
         assert_eq!(transport_auto.protocol_name(), "http");
         assert!(transport_auto.supports_streaming());

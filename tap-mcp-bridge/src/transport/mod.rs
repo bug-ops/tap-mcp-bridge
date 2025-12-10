@@ -13,9 +13,11 @@
 //! # Examples
 //!
 //! ```rust,no_run
-//! use tap_mcp_bridge::transport::{HttpTransport, RequestContext, Transport};
-//! use tap_mcp_bridge::tap::{TapSigner, InteractionType};
 //! use ed25519_dalek::SigningKey;
+//! use tap_mcp_bridge::{
+//!     tap::{InteractionType, TapSigner},
+//!     transport::{HttpTransport, RequestContext, Transport},
+//! };
 //!
 //! # async fn example() -> tap_mcp_bridge::error::Result<()> {
 //! // Create transport
@@ -51,9 +53,9 @@ use crate::{
     tap::{InteractionType, TapSigner},
 };
 
-mod sealed;
 pub mod config;
 pub mod http;
+mod sealed;
 
 pub use config::{HttpConfig, HttpVersion, TransportConfig};
 pub use http::HttpTransport;
@@ -114,9 +116,11 @@ pub struct TransportResponse {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use tap_mcp_bridge::transport::{HttpTransport, RequestContext, Transport};
-/// use tap_mcp_bridge::tap::{TapSigner, InteractionType};
 /// use ed25519_dalek::SigningKey;
+/// use tap_mcp_bridge::{
+///     tap::{InteractionType, TapSigner},
+///     transport::{HttpTransport, RequestContext, Transport},
+/// };
 ///
 /// # async fn example() -> tap_mcp_bridge::error::Result<()> {
 /// let transport = HttpTransport::new()?;
@@ -329,8 +333,7 @@ mod tests {
     #[test]
     fn test_transport_response_large_body() {
         let large_body = vec![0u8; 1024 * 1024]; // 1 MB
-        let response =
-            TransportResponse { status: 200, body: large_body.clone(), headers: vec![] };
+        let response = TransportResponse { status: 200, body: large_body.clone(), headers: vec![] };
 
         assert_eq!(response.body.len(), 1024 * 1024);
         assert_eq!(response.body, large_body);
@@ -347,8 +350,7 @@ mod tests {
 
     #[test]
     fn test_transport_response_debug() {
-        let response =
-            TransportResponse { status: 200, body: b"test".to_vec(), headers: vec![] };
+        let response = TransportResponse { status: 200, body: b"test".to_vec(), headers: vec![] };
 
         let debug_str = format!("{response:?}");
         assert!(debug_str.contains("TransportResponse"));
@@ -384,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_transport_response_binary_body() {
-        let binary_data = vec![0xFF, 0xFE, 0xFD, 0xFC];
+        let binary_data = vec![0xff, 0xfe, 0xfd, 0xfc];
         let response =
             TransportResponse { status: 200, body: binary_data.clone(), headers: vec![] };
 
