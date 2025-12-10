@@ -281,6 +281,67 @@ pub enum BridgeError {
     /// - The merchant supports the selected protocol
     #[error("Protocol not supported: {0}")]
     UnsupportedProtocol(String),
+
+    /// Invalid subscription plan ID.
+    ///
+    /// This error occurs when a plan ID fails validation.
+    /// Plan IDs must be non-empty and 64 characters or less.
+    #[error("Invalid plan ID: {0}")]
+    InvalidPlanId(String),
+
+    /// Invalid subscription ID.
+    ///
+    /// This error occurs when a subscription ID fails validation.
+    /// Subscription IDs must be non-empty and 64 characters or less.
+    #[error("Invalid subscription ID: {0}")]
+    InvalidSubscriptionId(String),
+
+    /// Subscription operation failed.
+    ///
+    /// This error occurs when a subscription-related operation fails.
+    #[error("Subscription error: {0}")]
+    SubscriptionError(String),
+
+    /// Invalid state transition attempted.
+    ///
+    /// This error occurs when an invalid subscription state transition is attempted.
+    #[error("Invalid subscription state transition: cannot {action} from {current_state}")]
+    InvalidStateTransition {
+        /// Current state of the subscription.
+        current_state: String,
+        /// Action that was attempted.
+        action: String,
+    },
+
+    /// Usage reporting error.
+    ///
+    /// This error occurs when reporting usage for a usage-based subscription fails.
+    #[error("Usage reporting error: {0}")]
+    UsageError(String),
+
+    /// Proration calculation error.
+    ///
+    /// This error occurs when calculating proration for mid-cycle changes fails.
+    #[error("Proration error: {0}")]
+    ProrationError(String),
+
+    /// Payment method change error.
+    ///
+    /// This error occurs when updating a subscription's payment method fails.
+    #[error("Payment method change error: {0}")]
+    PaymentMethodChangeError(String),
+
+    /// Subscription not found.
+    ///
+    /// This error occurs when a subscription with the given ID does not exist.
+    #[error("Subscription not found: {0}")]
+    SubscriptionNotFound(String),
+
+    /// Plan not found.
+    ///
+    /// This error occurs when a subscription plan with the given ID does not exist.
+    #[error("Plan not found: {0}")]
+    PlanNotFound(String),
 }
 
 #[cfg(test)]

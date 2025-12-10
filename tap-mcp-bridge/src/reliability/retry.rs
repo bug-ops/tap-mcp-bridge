@@ -249,7 +249,9 @@ pub fn is_retryable(error: &BridgeError) -> bool {
         | BridgeError::CryptoError(_)
         | BridgeError::InvalidMerchantUrl(_)
         | BridgeError::InvalidConsumerId(_)
-        | BridgeError::InvalidInput(_) => false,
+        | BridgeError::InvalidInput(_)
+        | BridgeError::InvalidPlanId(_)
+        | BridgeError::InvalidSubscriptionId(_) => false,
         // Don't retry merchant protocol errors
         BridgeError::MerchantError(_) => false,
         // Don't retry merchant configuration errors
@@ -266,6 +268,14 @@ pub fn is_retryable(error: &BridgeError) -> bool {
         BridgeError::TransportError(_) => false,
         // Don't retry unsupported protocol errors (configuration issue)
         BridgeError::UnsupportedProtocol(_) => false,
+        // Don't retry subscription errors (business logic failures)
+        BridgeError::SubscriptionError(_)
+        | BridgeError::InvalidStateTransition { .. }
+        | BridgeError::UsageError(_)
+        | BridgeError::ProrationError(_)
+        | BridgeError::PaymentMethodChangeError(_)
+        | BridgeError::SubscriptionNotFound(_)
+        | BridgeError::PlanNotFound(_) => false,
     }
 }
 
