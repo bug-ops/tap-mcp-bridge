@@ -1,0 +1,52 @@
+# ACME Store - Custom Merchant Configuration
+#
+# Example of a merchant with non-standard API conventions.
+# Demonstrates endpoint customization and field mapping.
+
+name = "ACME Store"
+base_url = "https://api.acme-store.com"
+api_prefix = "/api/v2"
+
+[endpoints]
+# Custom catalog endpoints
+products = "/catalog/items"
+product = "/catalog/items/{id}"
+
+# Custom cart/basket endpoints
+cart = "/basket"
+add_to_cart = "/basket/add"
+cart_item = "/basket/line-items/{id}"
+
+# Custom order endpoints
+orders = "/purchases"
+order = "/purchases/{id}"
+checkout = "/purchases/complete"
+
+[field_mappings.request]
+# ACME uses different field names in requests
+consumer_id = "customerId"
+product_id = "sku"
+cart_id = "basketId"
+quantity = "qty"
+variant_id = "variantSku"
+
+[field_mappings.response]
+# Map ACME response fields back to standard TAP names
+customerId = "consumer_id"
+sku = "product_id"
+basketId = "cart_id"
+qty = "quantity"
+variantSku = "variant_id"
+unitPrice = "price"
+lineItems = "items"
+purchaseId = "order_id"
+totalAmount = "total"
+
+# ACME uses offset-based pagination
+pagination = "offset_based"
+
+# ACME requires API key authentication
+[auth]
+type = "api_key"
+header = "X-ACME-API-Key"
+env_var = "ACME_API_KEY"
