@@ -87,7 +87,7 @@ fn validate_header(name: &str, value: &str) -> Result<()> {
 /// use ed25519_dalek::SigningKey;
 /// use tap_mcp_bridge::{
 ///     tap::{InteractionType, TapSigner},
-///     transport::{HttpTransport, RequestContext},
+///     transport::{HttpTransport, RequestContext, Transport},
 /// };
 ///
 /// # async fn example() -> tap_mcp_bridge::error::Result<()> {
