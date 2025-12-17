@@ -80,6 +80,7 @@ pub mod models;
 pub mod orders;
 pub mod payment;
 pub mod products;
+pub mod subscriptions;
 pub mod tools;
 
 pub use tools::{
