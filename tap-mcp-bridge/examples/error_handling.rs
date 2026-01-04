@@ -162,6 +162,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Demonstrates comprehensive error handling with recovery guidance.
+#[allow(
+    clippy::too_many_lines,
+    reason = "Example function demonstrating comprehensive error handling patterns"
+)]
 fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, BridgeError>) {
     match result {
         Ok(checkout) => {
@@ -274,6 +278,52 @@ fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, Br
             eprintln!("   ✗ Unsupported protocol: {msg}");
             eprintln!("   → Fix: Enable required feature flags");
             eprintln!("   → Fix: Use a supported transport protocol");
+        }
+
+        // Subscription-related errors
+        Err(BridgeError::InvalidPlanId(msg)) => {
+            eprintln!("   ✗ Invalid plan ID: {msg}");
+            eprintln!("   → Fix: Use only alphanumeric, hyphen, and underscore characters");
+        }
+
+        Err(BridgeError::InvalidSubscriptionId(msg)) => {
+            eprintln!("   ✗ Invalid subscription ID: {msg}");
+            eprintln!("   → Fix: Use only alphanumeric, hyphen, and underscore characters");
+        }
+
+        Err(BridgeError::SubscriptionError(msg)) => {
+            eprintln!("   ✗ Subscription error: {msg}");
+            eprintln!("   → Check subscription state and try again");
+        }
+
+        Err(BridgeError::InvalidStateTransition { current_state, action }) => {
+            eprintln!("   ✗ Invalid state transition: cannot {action} from {current_state}");
+            eprintln!("   → Check subscription current state before operation");
+        }
+
+        Err(BridgeError::UsageError(msg)) => {
+            eprintln!("   ✗ Usage error: {msg}");
+            eprintln!("   → Validate usage quantity and timestamp");
+        }
+
+        Err(BridgeError::ProrationError(msg)) => {
+            eprintln!("   ✗ Proration error: {msg}");
+            eprintln!("   → Check subscription dates and amounts");
+        }
+
+        Err(BridgeError::PaymentMethodChangeError(msg)) => {
+            eprintln!("   ✗ Payment method change error: {msg}");
+            eprintln!("   → Verify payment method details and try again");
+        }
+
+        Err(BridgeError::SubscriptionNotFound(msg)) => {
+            eprintln!("   ✗ Subscription not found: {msg}");
+            eprintln!("   → Verify subscription ID exists");
+        }
+
+        Err(BridgeError::PlanNotFound(msg)) => {
+            eprintln!("   ✗ Plan not found: {msg}");
+            eprintln!("   → Verify plan ID exists and is active");
         }
     }
 }
