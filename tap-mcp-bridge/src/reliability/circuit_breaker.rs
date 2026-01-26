@@ -157,7 +157,7 @@ impl Default for CircuitBreakerConfig {
         Self {
             failure_threshold: 5,
             success_threshold: 2,
-            reset_timeout: Duration::from_secs(60),
+            reset_timeout: Duration::from_mins(1),
         }
     }
 }
@@ -489,7 +489,7 @@ mod tests {
         let config = CircuitBreakerConfig::default();
         assert_eq!(config.failure_threshold, 5);
         assert_eq!(config.success_threshold, 2);
-        assert_eq!(config.reset_timeout, Duration::from_secs(60));
+        assert_eq!(config.reset_timeout, Duration::from_mins(1));
     }
 
     #[test]
@@ -528,7 +528,7 @@ mod tests {
         let config = CircuitBreakerConfig {
             failure_threshold: 3,
             success_threshold: 2,
-            reset_timeout: Duration::from_secs(60),
+            reset_timeout: Duration::from_mins(1),
         };
         let breaker = CircuitBreaker::new(config);
 
@@ -628,7 +628,7 @@ mod tests {
         let config = CircuitBreakerConfig {
             failure_threshold: 10,
             success_threshold: 2,
-            reset_timeout: Duration::from_secs(60),
+            reset_timeout: Duration::from_mins(1),
         };
         let breaker = Arc::new(CircuitBreaker::new(config));
 
@@ -714,7 +714,7 @@ mod tests {
         let config = CircuitBreakerConfig {
             failure_threshold: 1,
             success_threshold: 1,
-            reset_timeout: Duration::from_secs(3600), // 1 hour
+            reset_timeout: Duration::from_hours(1), // 1 hour
         };
         let breaker = CircuitBreaker::new(config);
 
@@ -734,7 +734,7 @@ mod tests {
         let config = CircuitBreakerConfig {
             failure_threshold: 1000,
             success_threshold: 2,
-            reset_timeout: Duration::from_secs(60),
+            reset_timeout: Duration::from_mins(1),
         };
         let breaker = CircuitBreaker::new(config);
 
