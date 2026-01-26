@@ -43,7 +43,7 @@ docs:
       - 'docs/**/*'
 
 # Dependencies
-deps:
+dependencies:
   - changed-files:
     - any-glob-to-any-file:
       - '**/Cargo.toml'
