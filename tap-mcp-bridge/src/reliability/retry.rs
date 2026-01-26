@@ -522,13 +522,13 @@ mod tests {
         let policy = RetryPolicy {
             max_attempts: 100,
             initial_delay: Duration::from_millis(100),
-            max_delay: Duration::from_secs(60),
+            max_delay: Duration::from_mins(1),
             backoff_multiplier: 2.0,
         };
 
         // Very large attempt number should still be capped
         let delay = policy.delay_for_attempt(100);
-        assert_eq!(delay, Duration::from_secs(60));
+        assert_eq!(delay, Duration::from_mins(1));
     }
 
     #[tokio::test]
