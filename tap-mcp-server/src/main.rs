@@ -39,7 +39,7 @@ use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
     handler::server::{tool::ToolRouter, wrapper::Parameters},
     model::{
-        CallToolRequestParam, CallToolResult, Content, ListToolsResult, PaginatedRequestParam,
+        CallToolRequestParams, CallToolResult, Content, ListToolsResult, PaginatedRequestParams,
     },
     schemars,
     schemars::JsonSchema,
@@ -384,7 +384,7 @@ impl TapMcpServer {
 impl ServerHandler for TapMcpServer {
     async fn list_tools(
         &self,
-        _pagination: Option<PaginatedRequestParam>,
+        _pagination: Option<PaginatedRequestParams>,
         _ctx: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
         Ok(ListToolsResult { tools: self.tool_router.list_all(), next_cursor: None, meta: None })
@@ -392,7 +392,7 @@ impl ServerHandler for TapMcpServer {
 
     async fn call_tool(
         &self,
-        params: CallToolRequestParam,
+        params: CallToolRequestParams,
         ctx: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
         use rmcp::handler::server::tool::ToolCallContext;
