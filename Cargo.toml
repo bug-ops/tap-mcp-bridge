@@ -38,7 +38,7 @@ toml = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 url = "2"
-uuid = "1.21"
+uuid = "1.22"
 zeroize = "1"
 
 [workspace.lints.rust]
