@@ -20,7 +20,7 @@ Rust library and MCP server for Visa's Trusted Agent Protocol (TAP), enabling AI
 
 ```toml
 [dependencies]
-tap-mcp-bridge = "0.2"
+tap-mcp-bridge = "0.3"
 ```
 
 ### As MCP Server

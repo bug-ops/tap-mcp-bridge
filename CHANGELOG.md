@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.0] - 2026-05-01
+
+### Added
+
+#### MCP E-Commerce Flow (#21)
+
+- Full cart-and-order MCP tool suite: `get_products`, `get_product`, `add_to_cart`, `get_cart`, `update_cart_item`, `remove_from_cart`, `create_order`, `get_order`, `process_payment`
+- End-to-end checkout flow from product browsing to APC-encrypted payment
+
+#### Merchant Abstraction Layer (#22)
+
+- `MerchantApi` trait for pluggable merchant integrations
+- `DefaultMerchant` with TOML-based configuration
+- Field mapping for adapting non-standard merchant APIs (request/response key remapping)
+- `examples/merchants/` with reference TOML configurations
+
+#### Transport Abstraction Layer (#23)
+
+- `HttpTransport` with `HttpConfig` (timeout, pool sizing, HTTP version selection)
+- HTTP/1.1 and HTTP/2 support with multiplexing
+- Hooks reserved for future HTTP/3, gRPC, and JSON-RPC transports
+
+#### Subscription Management (#24)
+
+- Recurring payment / subscription management primitives
+
+#### CI/CD
+
+- Dependabot auto-merge workflow for patch and minor dependency updates
+- `softprops/action-gh-release` v3 (Node 24 runtime) for GitHub releases
+- `dependabot/fetch-metadata` v3 (Node 24 runtime)
+- `actions/checkout` v5 → v6, `actions/labeler` v5 → v6
+- `docker/build-push-action` v6 → v7, `docker/setup-buildx-action` v3 → v4
+
+### Changed
+
+#### Dependencies
+
+- `rmcp` 0.11 → 0.17 (multiple major bumps)
+- `clap` 4.5 → 4.6
+- `tempfile` 3.23 → 3.27
+- `rust_decimal` 1.39 → 1.40
+- `uuid` 1.19 → 1.22
+- `jsonwebtoken` 10.2 → 10.3
+- `schemars` 1.1 → 1.2
+- `toml` 0.9 → 1.0
+- `aws-lc-rs` 1.15 → 1.16
+- Numerous transitive bumps across `tokio`, `serde`, `reqwest`, `hyper`, `rkyv`, `bytes`, and security-update groups
+
+### Fixed
+
+#### Security
+
+- RUSTSEC-2026-0049 — `rustls-webpki` bumped to 0.103.13 (CRL distribution-point matching)
+- GHSA-cq8v-f236-94qc — `rand` bumped to 0.9.4 (unsound `rand::rng()` with custom logger)
+- `openssl` 0.10.77 → 0.10.78
+
 ## [0.2.0] - 2025-12-10
 
 ### Added
@@ -221,6 +280,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.2.0
 [0.1.2]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.1.2
 [0.1.1]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.1.1
