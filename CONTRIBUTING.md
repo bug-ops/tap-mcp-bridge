@@ -15,7 +15,7 @@ This project follows the **[Microsoft Rust Guidelines](https://microsoft.github.
 
 ## Prerequisites
 
-- **Rust** 1.85+ (Edition 2024)
+- **Rust** 1.94+ (Edition 2024, resolver v3)
 - **Cargo**
 - **Optional**: `cargo-make`, `cargo-nextest`, `cargo-deny`
 

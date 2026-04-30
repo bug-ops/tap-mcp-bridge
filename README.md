@@ -47,7 +47,7 @@ Configure your MCP client (Claude Desktop, etc.):
 ```
 
 > [!IMPORTANT]
-> Requires Rust 1.85+ (Edition 2024).
+> Requires Rust 1.94+ (Edition 2024, resolver v3).
 
 ## Quick Example
 
