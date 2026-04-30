@@ -28,7 +28,7 @@ hex.workspace = true
 josekit = { workspace = true, features = ["vendored"] }
 jsonwebtoken = { workspace = true, features = ["aws_lc_rs"] }
 lru.workspace = true
-reqwest = { workspace = true, features = ["http2", "json", "rustls-tls"] }
+reqwest = { workspace = true, features = ["http2", "json", "rustls"] }
 rmcp.workspace = true
 rust_decimal = { workspace = true, features = ["serde"] }
 secrecy = { workspace = true, features = ["serde"] }
