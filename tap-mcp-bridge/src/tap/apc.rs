@@ -1026,4 +1026,53 @@ mwIDAQAB
         assert!(!base.contains("\"signature\""));
         assert!(!base.contains("modified-signature"));
     }
+
+    // Regression tests for issue #138: APC plaintext byte layout MUST follow
+    // source-declared key order (requires `serde_json/preserve_order`). The
+    // plaintext bytes are encrypted into the APC, so a layout change shifts
+    // ciphertext bytes for downstream consumers.
+    #[test]
+    fn test_payment_method_card_to_json_key_order() {
+        let payment = PaymentMethod::Card(CardData {
+            number: "4111111111111111".to_owned(),
+            exp_month: "12".to_owned(),
+            exp_year: "25".to_owned(),
+            cvv: "123".to_owned(),
+            cardholder_name: "John Doe".to_owned(),
+        });
+        let json = payment.to_json().unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"card","cardNumber":"4111111111111111","expiryMonth":"12","expiryYear":"25","cvv":"123","cardholderName":"John Doe"}"#
+        );
+    }
+
+    #[test]
+    fn test_payment_method_bank_account_to_json_key_order() {
+        let payment = PaymentMethod::BankAccount(BankAccountData {
+            account_number: "1234567890".to_owned(),
+            routing_number: "021000021".to_owned(),
+            account_type: "checking".to_owned(),
+            account_holder_name: "Jane Smith".to_owned(),
+        });
+        let json = payment.to_json().unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"bank_account","accountNumber":"1234567890","routingNumber":"021000021","accountType":"checking","accountHolderName":"Jane Smith"}"#
+        );
+    }
+
+    #[test]
+    fn test_payment_method_digital_wallet_to_json_key_order() {
+        let payment = PaymentMethod::DigitalWallet(DigitalWalletData {
+            wallet_type: "apple_pay".to_owned(),
+            wallet_token: "encrypted-wallet-token".to_owned(),
+            account_holder_name: "Bob Smith".to_owned(),
+        });
+        let json = payment.to_json().unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"digital_wallet","walletType":"apple_pay","walletToken":"encrypted-wallet-token","accountHolderName":"Bob Smith"}"#
+        );
+    }
 }

@@ -569,6 +569,46 @@ mod tests {
         assert_eq!(HealthCheckStatus::Warn.as_str(), "warn");
     }
 
+    // Regression test for issue #138: JSON object keys built via `json!{}`
+    // MUST follow source declaration order so downstream snapshots/hashes
+    // remain stable across releases. Requires `serde_json/preserve_order`.
+    #[test]
+    fn test_health_report_to_json_preserves_key_order() {
+        let report = HealthReport {
+            status: HealthStatus::Healthy,
+            version: "0.3.0".to_owned(),
+            agent_id: "test-agent-1".to_owned(),
+            uptime_secs: 0,
+            checks: vec![HealthCheck::pass_with_message(
+                "signing_key",
+                "Ed25519 signing key loaded successfully",
+            )],
+            metrics: None,
+        };
+
+        let json = report.to_json().expect("JSON serialization should succeed");
+        let status_pos = json.find("\"status\"").expect("status key present");
+        let version_pos = json.find("\"version\"").expect("version key present");
+        let agent_pos = json.find("\"agent_id\"").expect("agent_id key present");
+        let uptime_pos = json.find("\"uptime_secs\"").expect("uptime_secs key present");
+        let checks_pos = json.find("\"checks\"").expect("checks key present");
+        assert!(status_pos < version_pos);
+        assert!(version_pos < agent_pos);
+        assert!(agent_pos < uptime_pos);
+        assert!(uptime_pos < checks_pos);
+
+        let name_pos = json.find("\"name\"").expect("name key present");
+        // The first "\"status\"" is the top-level field; the next occurrence after
+        // `checks_pos` is the nested HealthCheck status field.
+        let check_status_pos = json
+            .match_indices("\"status\"")
+            .find_map(|(idx, _)| (idx > checks_pos).then_some(idx))
+            .expect("nested status key present");
+        let message_pos = json.find("\"message\"").expect("message key present");
+        assert!(name_pos < check_status_pos);
+        assert!(check_status_pos < message_pos);
+    }
+
     #[test]
     fn test_health_status_as_str() {
         assert_eq!(HealthStatus::Healthy.as_str(), "healthy");
