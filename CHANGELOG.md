@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `TAP_ALLOW_LOOPBACK=1` developer escape hatch in `parse_merchant_url`: when set, the function accepts `http://localhost`, `http://127.0.0.1`, and their `https` counterparts so wiremock-style harnesses can drive the full request-response loop end to end. The override is scoped to loopback hosts — non-loopback `http://` URLs are still rejected — and is documented as dev-only; it must never be set in production (#126)
 
+### Changed
+
+- CI overhaul (`.github/workflows/ci.yml`): unified test build via `cargo nextest archive` (built once with `sccache`, replayed by the `test` matrix from the uploaded artifact); added a `coverage` job using `cargo-llvm-cov nextest` with Codecov upload on master pushes; dropped the dedicated release-build job — only debug builds remain. `Swatinem/rust-cache` is now per-job (`ci-check`, `ci-deny`, `ci-msrv`, `ci-features`, `ci-udeps`, `ci-build-${os}`, `ci-coverage`) and runs with `cache-targets: false` on sccache-enabled jobs to keep the two caches from clashing on `target/`.
+- New `[profile.ci]` (inherits `dev`, `debug = 0`, `codegen-units = 16`) and `.github/nextest.toml` (`ci`, `ci-partition` profiles with slow-test surfacing) drive the archive workflow.
+- Docker job (`docker-build-and-scan`) reuses the `tap-mcp-server` binary produced by `build-tests` instead of rebuilding from source. New `docker/Dockerfile` is a runtime-only image (Ubuntu 24.04 to match the GHA runner glibc) that copies the prebuilt binary; the legacy root-level multi-stage `Dockerfile` is kept for ad-hoc end-to-end builds. Trivy now scans the built image and uploads SARIF findings to the GitHub Security tab (CRITICAL/HIGH severities).
+- `josekit` `vendored` feature is now scoped to Windows only (`[target.'cfg(windows)'.dependencies]`). On Linux/macOS the crate links against system OpenSSL (libssl-dev preinstalled on `ubuntu-latest`; `OPENSSL_DIR=$(brew --prefix openssl@3)` set by CI on `macos-latest`), avoiding the ~50 second cold `openssl-src` compile that previously dominated the build profile.
+- `build-tests` and `coverage` jobs now install the `mold` linker on Linux via `rui314/setup-mold@v1`, shaving a few seconds off the final link step for binaries and tests.
+- `tap-mcp-server` production binary is now built by a dedicated `build-binary` job (Linux only) instead of an in-matrix conditional step, keeping the matrix uniform across OSes. `docker-build-and-scan` consumes its `tap-mcp-server-binary` artifact; both jobs run in parallel against shared sccache.
+
 ### Fixed
 
 - `tap-mcp-server` exited immediately after responding to `initialize`, dropping every subsequent request. Under rmcp 1.5, `Service::serve(transport)` resolves at initialization and returns a `RunningService` whose background task drives the request loop; the server now awaits `RunningService::waiting()` so the connection lives for its full lifetime (#118)

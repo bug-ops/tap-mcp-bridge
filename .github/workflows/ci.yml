@@ -10,6 +10,9 @@ on:
     # Weekly dependency check every Sunday at midnight
     - cron: '0 0 * * 0'
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
@@ -25,13 +28,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Quick checks first - fail fast
+  # Quick lint pass: fmt + clippy + rustdoc + doctests on a single runner.
   check:
     name: Check
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
@@ -43,8 +44,7 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "check"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          shared-key: "ci-check"
 
       - name: Check formatting
         run: cargo +nightly fmt --all -- --check
@@ -55,15 +55,16 @@ jobs:
       - name: Check documentation
         run: cargo doc --no-deps --all-features
         env:
-          RUSTDOCFLAGS: "-D warnings"
+          RUSTDOCFLAGS: "--deny rustdoc::broken_intra_doc_links -D warnings"
+
+      - name: Run doctests
+        run: cargo test --doc --all-features
 
   # Security and license compliance
   security:
     name: Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -73,7 +74,7 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "security"
+          shared-key: "ci-deny"
 
       - name: Install cargo-deny
         uses: taiki-e/install-action@v2
@@ -89,84 +90,32 @@ jobs:
       - name: Check bans
         run: cargo deny check bans
 
-  # Cross-platform tests with matrix
-  test:
-    name: Test (${{ matrix.os }})
-    needs: [check]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
-
-      # Platform-specific setup
-      # Note: Using rustls for reqwest, so no OpenSSL needed
-      # josekit uses vendored OpenSSL which compiles from source
-
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "test-${{ matrix.os }}"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
-
-      - name: Install nextest
-        uses: taiki-e/install-action@v2
-        with:
-          tool: nextest
-
-      - name: Build
-        run: cargo build --all-targets --all-features
-
-      - name: Run tests
-        run: cargo nextest run --all-features --no-fail-fast
-
-      - name: Run doctests
-        run: cargo test --doc --all-features
-
-  # Dependency verification
-  dependencies:
-    name: Check Dependencies
-    needs: [check]
+  # MSRV check (matches workspace.package.rust-version)
+  msrv:
+    name: Check MSRV
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust ${{ env.RUST_VERSION }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ env.RUST_VERSION }}"
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "dependencies"
+          shared-key: "ci-msrv"
 
-      - name: Install cargo-udeps
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-udeps
-
-      - name: Check for unused dependencies
-        run: cargo udeps --all-targets
+      - name: cargo check (MSRV, --all-features --locked)
+        run: cargo check --workspace --all-targets --all-features --locked
 
   # Feature combination testing
   feature-testing:
     name: Feature Combinations
-    needs: [check]
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -176,7 +125,7 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "features"
+          shared-key: "ci-features"
 
       - name: Install cargo-hack
         uses: taiki-e/install-action@v2
@@ -186,38 +135,11 @@ jobs:
       - name: Check all feature combinations
         run: cargo hack check --feature-powerset
 
-  # MSRV check (if specified in Cargo.toml)
-  msrv:
-    name: Check MSRV
-    needs: [check]
+  # Unused dependency check
+  dependencies:
+    name: Check Dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install Rust ${RUST_VERSION}
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ env.RUST_VERSION }}"
-
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "msrv"
-
-      - name: Check with MSRV
-        run: cargo check --all-features
-
-  # Release build check
-  release:
-    name: Release Build
-    needs: [test]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -227,26 +149,257 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "release"
+          shared-key: "ci-udeps"
 
-      - name: Build release
-        run: cargo build --release --all-features
+      - name: Install cargo-udeps
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-udeps
 
-      - name: Check binary size
+      - name: Check for unused dependencies
+        run: cargo udeps --all-targets
+
+  # Build a per-OS nextest archive once with sccache, then reuse it in `test`.
+  # Runs in parallel with check / msrv / feature-testing / dependencies.
+  build-tests:
+    name: Build Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      # mold is much faster than ld at the final link step; this saves ~5-10s
+      # per binary on the matrix builds. Linux only (mold doesn't support
+      # macOS/Windows).
+      - name: Install mold linker
+        if: runner.os == 'Linux'
+        uses: rui314/setup-mold@v1
+
+      # josekit links against system OpenSSL on non-Windows targets (see
+      # tap-mcp-bridge/Cargo.toml). ubuntu-latest already has libssl-dev;
+      # macos-latest needs OPENSSL_DIR pointing at the brew install so
+      # openssl-sys skips its 50s vendored build.
+      - name: Configure system OpenSSL on macOS
+        if: runner.os == 'macOS'
+        run: echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+
+      # cache-targets: false because sccache already caches build artifacts —
+      # leaving target/ out of the action prevents the two caches from clashing.
+      - name: Cache Cargo (registry only)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "ci-build-${{ matrix.os }}"
+          cache-targets: "false"
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      # Use a folded scalar (no shell line-continuation) so we keep the runner's
+      # default shell on every OS. On Windows, `shell: bash` loads MSYS perl,
+      # which lacks Locale::Maketext::Simple and breaks josekit's vendored
+      # OpenSSL build; pwsh defaults find Strawberry Perl correctly.
+      - name: Build and archive tests
+        run: >-
+          cargo nextest archive
+          --config-file .github/nextest.toml
+          --cargo-profile ci
+          --workspace
+          --all-features
+          --lib --bins --tests
+          --archive-file nextest-archive.tar.zst
+
+      - name: Upload test archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-archive-${{ matrix.os }}
+          path: nextest-archive.tar.zst
+          retention-days: 1
+
+      - name: Print sccache stats
+        if: always()
+        run: sccache --show-stats
+
+  # Dedicated linux build for the production binary consumed by
+  # docker-build-and-scan. `cargo nextest archive --bins` only compiles bins
+  # as test targets into target/ci/deps, so we run a focused `cargo build`
+  # here. Runs in parallel with build-tests; sccache makes the second pass
+  # cheap on warm cache.
+  build-binary:
+    name: Build Server Binary
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install mold linker
+        uses: rui314/setup-mold@v1
+
+      - name: Cache Cargo (registry only)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "ci-build-binary"
+          cache-targets: "false"
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Build server binary
+        run: cargo build --bin tap-mcp-server --profile ci
+
+      - name: Upload server binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tap-mcp-server-binary
+          path: target/ci/tap-mcp-server
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Print sccache stats
+        if: always()
+        run: sccache --show-stats
+
+  # Run the prebuilt archive on every supported OS — no Cargo cache required.
+  # Gated on every lint/check job so a clippy/deny/msrv failure stops tests
+  # before they burn a matrix worth of runner minutes.
+  test:
+    name: Test (${{ matrix.os }})
+    needs: [check, security, msrv, feature-testing, dependencies, build-tests]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Download test archive
+        uses: actions/download-artifact@v4
+        with:
+          name: nextest-archive-${{ matrix.os }}
+
+      - name: Run tests
+        run: >-
+          cargo nextest run
+          --config-file .github/nextest.toml
+          --archive-file nextest-archive.tar.zst
+          --workspace-remap .
+          --profile ci
+
+  # Coverage runs on master only — instrumented builds invalidate sccache hits
+  # for normal builds, so we keep its target out of the shared cache.
+  coverage:
+    name: Coverage
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+      # -D warnings would promote workspace lints to errors during the
+      # instrumented build; linting is enforced by the `check` job.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview
+
+      - name: Install mold linker
+        uses: rui314/setup-mold@v1
+
+      - name: Cache Cargo (registry only)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "ci-coverage"
+          cache-targets: "false"
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Install nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Generate coverage
         run: |
-          ls -lh target/release/
-          du -sh target/release/
+          cargo llvm-cov nextest \
+            --config-file .github/nextest.toml \
+            --cargo-profile ci \
+            --workspace \
+            --all-features \
+            --lib --bins \
+            --lcov --output-path lcov.info
 
-  # Docker build check
-  docker:
-    name: Docker Build
-    needs: [check]
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov.info
+          fail_ci_if_error: false
+
+      - name: Print sccache stats
+        if: always()
+        run: sccache --show-stats
+
+  # Build the docker image from the prebuilt server binary and scan it with
+  # Trivy. SARIF output is uploaded to the GitHub Security tab.
+  docker-build-and-scan:
+    name: Docker Build and Security Scan
+    needs: [check, security, msrv, feature-testing, dependencies, build-binary]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v6
+
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: tap-mcp-server-binary
+          path: docker/
+
+      - name: Restore binary executable bit
+        run: chmod +x docker/tap-mcp-server
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -254,32 +407,68 @@ jobs:
       - name: Build Docker image
         uses: docker/build-push-action@v7
         with:
-          context: .
+          context: docker
+          file: docker/Dockerfile
+          load: true
           push: false
-          tags: tap-mcp-server:test
-          build-args: |
-            RUST_VERSION=${{ env.RUST_VERSION }}
+          tags: tap-mcp-server:local
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # All checks passed
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.35.0
+        # Trivy exits 1 when findings are present; without continue-on-error
+        # the SARIF upload would be skipped and findings lost.
+        continue-on-error: true
+        with:
+          image-ref: tap-mcp-server:local
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          limit-severities-for-sarif: true
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+  # Aggregate gate
   ci-success:
     name: CI Success
-    needs: [check, security, test, dependencies, feature-testing, msrv, docker]
+    needs:
+      - check
+      - security
+      - msrv
+      - feature-testing
+      - dependencies
+      - build-tests
+      - build-binary
+      - test
+      - coverage
+      - docker-build-and-scan
     runs-on: ubuntu-latest
     if: always()
     permissions: {}
     steps:
       - name: Check all jobs
         run: |
-          if [[ "${{ needs.check.result }}" != "success" ]] || \
-             [[ "${{ needs.security.result }}" != "success" ]] || \
-             [[ "${{ needs.test.result }}" != "success" ]] || \
-             [[ "${{ needs.dependencies.result }}" != "success" ]] || \
-             [[ "${{ needs.feature-testing.result }}" != "success" ]] || \
-             [[ "${{ needs.msrv.result }}" != "success" ]] || \
-             [[ "${{ needs.docker.result }}" != "success" ]]; then
-            echo "One or more jobs failed"
-            exit 1
-          fi
-          echo "All jobs passed successfully!"
+          results=(
+            "${{ needs.check.result }}"
+            "${{ needs.security.result }}"
+            "${{ needs.msrv.result }}"
+            "${{ needs.feature-testing.result }}"
+            "${{ needs.dependencies.result }}"
+            "${{ needs.build-tests.result }}"
+            "${{ needs.build-binary.result }}"
+            "${{ needs.test.result }}"
+            "${{ needs.coverage.result }}"
+            "${{ needs.docker-build-and-scan.result }}"
+          )
+          for r in "${results[@]}"; do
+            if [[ "$r" != "success" && "$r" != "skipped" ]]; then
+              echo "::error::One or more jobs failed or were cancelled"
+              exit 1
+            fi
+          done
+          echo "All jobs passed"

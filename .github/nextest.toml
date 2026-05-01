@@ -1,0 +1,30 @@
+# Nextest configuration for tap-mcp-bridge
+# https://nexte.st/book/configuration.html
+
+[profile.default]
+# Local development profile — runs everything by default.
+
+[profile.ci]
+# CI profile used when running the prebuilt nextest archive.
+default-filter = "all()"
+test-threads = "num-cpus"
+
+[[profile.ci.overrides]]
+# Surface slow tests early without failing the run.
+filter = "all()"
+slow-timeout = { period = "30s" }
+
+[profile.ci.junit]
+path = "target/nextest/ci/junit.xml"
+
+[profile.ci-partition]
+# Used by the partitioned test matrix in CI.
+# Each shard receives --partition hash:K/N on the command line.
+test-threads = "num-cpus"
+
+[[profile.ci-partition.overrides]]
+filter = "all()"
+slow-timeout = { period = "30s" }
+
+[profile.ci-partition.junit]
+path = "target/nextest/ci/junit.xml"
