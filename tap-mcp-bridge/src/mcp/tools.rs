@@ -289,9 +289,10 @@ async fn execute_tap_request_with_acro(
 
     let client = &*HTTP_CLIENT;
 
+    let full_url = crate::mcp::http::compose_request_url(&url, &path);
     let request = match method {
-        "POST" => client.post(format!("{url}{path}")),
-        "GET" => client.get(format!("{url}{path}")),
+        "POST" => client.post(&full_url),
+        "GET" => client.get(&full_url),
         _ => {
             return Err(BridgeError::InvalidMerchantUrl(format!(
                 "unsupported HTTP method: {method}"
@@ -346,9 +347,10 @@ async fn execute_tap_request(
 
     let client = &*HTTP_CLIENT;
 
+    let full_url = crate::mcp::http::compose_request_url(&url, &path);
     let request = match method {
-        "POST" => client.post(format!("{url}{path}")),
-        "GET" => client.get(format!("{url}{path}")),
+        "POST" => client.post(&full_url),
+        "GET" => client.get(&full_url),
         _ => {
             return Err(BridgeError::InvalidMerchantUrl(format!(
                 "unsupported HTTP method: {method}"
