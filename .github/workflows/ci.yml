@@ -230,16 +230,44 @@ jobs:
           path: nextest-archive.tar.zst
           retention-days: 1
 
-      # `cargo nextest archive --bins` compiles each bin as a test target into
-      # target/ci/deps and never produces target/ci/tap-mcp-server. Run a quick
-      # `cargo build` afterwards on ubuntu so the docker job gets the actual
-      # production binary; sccache makes this practically free.
-      - name: Build server binary for docker
-        if: matrix.os == 'ubuntu-latest'
+      - name: Print sccache stats
+        if: always()
+        run: sccache --show-stats
+
+  # Dedicated linux build for the production binary consumed by
+  # docker-build-and-scan. `cargo nextest archive --bins` only compiles bins
+  # as test targets into target/ci/deps, so we run a focused `cargo build`
+  # here. Runs in parallel with build-tests; sccache makes the second pass
+  # cheap on warm cache.
+  build-binary:
+    name: Build Server Binary
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install mold linker
+        uses: rui314/setup-mold@v1
+
+      - name: Cache Cargo (registry only)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "ci-build-binary"
+          cache-targets: "false"
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Build server binary
         run: cargo build --bin tap-mcp-server --profile ci
 
       - name: Upload server binary
-        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: tap-mcp-server-binary
@@ -355,7 +383,7 @@ jobs:
   # Trivy. SARIF output is uploaded to the GitHub Security tab.
   docker-build-and-scan:
     name: Docker Build and Security Scan
-    needs: [check, security, msrv, feature-testing, dependencies, build-tests]
+    needs: [check, security, msrv, feature-testing, dependencies, build-binary]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -415,6 +443,7 @@ jobs:
       - feature-testing
       - dependencies
       - build-tests
+      - build-binary
       - test
       - coverage
       - docker-build-and-scan
@@ -431,6 +460,7 @@ jobs:
             "${{ needs.feature-testing.result }}"
             "${{ needs.dependencies.result }}"
             "${{ needs.build-tests.result }}"
+            "${{ needs.build-binary.result }}"
             "${{ needs.test.result }}"
             "${{ needs.coverage.result }}"
             "${{ needs.docker-build-and-scan.result }}"

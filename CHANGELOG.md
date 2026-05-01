@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker job (`docker-build-and-scan`) reuses the `tap-mcp-server` binary produced by `build-tests` instead of rebuilding from source. New `docker/Dockerfile` is a runtime-only image (Ubuntu 24.04 to match the GHA runner glibc) that copies the prebuilt binary; the legacy root-level multi-stage `Dockerfile` is kept for ad-hoc end-to-end builds. Trivy now scans the built image and uploads SARIF findings to the GitHub Security tab (CRITICAL/HIGH severities).
 - `josekit` `vendored` feature is now scoped to Windows only (`[target.'cfg(windows)'.dependencies]`). On Linux/macOS the crate links against system OpenSSL (libssl-dev preinstalled on `ubuntu-latest`; `OPENSSL_DIR=$(brew --prefix openssl@3)` set by CI on `macos-latest`), avoiding the ~50 second cold `openssl-src` compile that previously dominated the build profile.
 - `build-tests` and `coverage` jobs now install the `mold` linker on Linux via `rui314/setup-mold@v1`, shaving a few seconds off the final link step for binaries and tests.
+- `tap-mcp-server` production binary is now built by a dedicated `build-binary` job (Linux only) instead of an in-matrix conditional step, keeping the matrix uniform across OSes. `docker-build-and-scan` consumes its `tap-mcp-server-binary` artifact; both jobs run in parallel against shared sccache.
 
 ### Fixed
 
