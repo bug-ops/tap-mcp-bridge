@@ -30,11 +30,16 @@ const SUBSCRIPTION_REQUEST_TIMEOUT_SECS: u64 = 30;
 ///
 /// This static client is initialized once and reused across all requests,
 /// providing connection pooling and reducing per-request overhead.
+///
+/// Redirects are disabled to prevent TAP-signed credentials and request bodies
+/// from being forwarded to a redirect target — see [`crate::mcp::http::create_http_client`]
+/// for the rationale.
 static SUBSCRIPTION_HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     Client::builder()
         .timeout(Duration::from_secs(SUBSCRIPTION_REQUEST_TIMEOUT_SECS))
         .pool_max_idle_per_host(100)
         .http2_prior_knowledge()
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("failed to create subscription HTTP client")
 });

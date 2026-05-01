@@ -69,6 +69,15 @@ pub(crate) fn compose_request_url(base: &Url, path: &str) -> String {
 /// - Connection timeout: 10 seconds
 /// - Total timeout: 30 seconds
 /// - Connection pool: max 10 idle connections per host
+/// - Redirects: disabled ([`reqwest::redirect::Policy::none`])
+///
+/// Redirect-following is disabled because `reqwest`'s default `Policy::limited(10)`
+/// would forward TAP-specific headers (`Signature`, `Signature-Input`,
+/// `Signature-Agent`, `Content-Digest`) and 307/308 request bodies to the
+/// redirect target. RFC 9421 §1 binds a signature to a specific request — a
+/// redirect is a different request and the agent has not authorized it. A
+/// merchant returning 30x therefore surfaces as a [`BridgeError::MerchantError`]
+/// rather than being followed silently.
 ///
 /// # Errors
 ///
@@ -78,6 +87,7 @@ pub fn create_http_client() -> Result<Client> {
         .pool_max_idle_per_host(10)
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(BridgeError::HttpError)
 }
@@ -353,6 +363,39 @@ mod tests {
     fn test_create_http_client() {
         let client = create_http_client();
         assert!(client.is_ok());
+    }
+
+    /// Regression test for issue #144 — HTTP clients must not auto-follow
+    /// redirects, since `reqwest` would forward TAP signature headers (and
+    /// 307/308 request bodies) to the redirect target.
+    #[tokio::test]
+    async fn test_create_http_client_does_not_follow_redirects() {
+        use tokio::{io::AsyncWriteExt, net::TcpListener};
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            // Loopback kernel buffers absorb the small request without an
+            // explicit read on this side; reply immediately with the redirect.
+            let response = b"HTTP/1.1 307 Temporary Redirect\r\n\
+                             Location: https://attacker.example/admin/exfil\r\n\
+                             Content-Length: 0\r\n\
+                             Connection: close\r\n\r\n";
+            socket.write_all(response).await.unwrap();
+            socket.shutdown().await.unwrap();
+        });
+
+        let client = create_http_client().unwrap();
+        let url = format!("http://{addr}/checkout");
+        let response = client.get(&url).send().await.unwrap();
+
+        // With `Policy::none()`, the 307 surfaces as the response status; if
+        // redirects were auto-followed, reqwest would dial `attacker.example`
+        // and never produce a 307 status here.
+        assert_eq!(response.status().as_u16(), 307);
+        server.await.unwrap();
     }
 
     #[test]
