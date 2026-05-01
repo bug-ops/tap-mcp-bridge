@@ -221,6 +221,16 @@ jobs:
           path: nextest-archive.tar.zst
           retention-days: 1
 
+      # Reuse the same compilation pass for the docker job: nextest archive
+      # also leaves target/ci/tap-mcp-server on the runner.
+      - name: Upload server binary
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tap-mcp-server-binary
+          path: target/ci/tap-mcp-server
+          retention-days: 1
+
       - name: Print sccache stats
         if: always()
         run: sccache --show-stats
@@ -322,14 +332,27 @@ jobs:
         if: always()
         run: sccache --show-stats
 
-  # Docker build check
-  docker:
-    name: Docker Build
-    needs: [check]
+  # Build the docker image from the prebuilt server binary and scan it with
+  # Trivy. SARIF output is uploaded to the GitHub Security tab.
+  docker-build-and-scan:
+    name: Docker Build and Security Scan
+    needs: [check, build-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v6
+
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: tap-mcp-server-binary
+          path: docker/
+
+      - name: Restore binary executable bit
+        run: chmod +x docker/tap-mcp-server
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -337,13 +360,31 @@ jobs:
       - name: Build Docker image
         uses: docker/build-push-action@v7
         with:
-          context: .
+          context: docker
+          file: docker/Dockerfile
+          load: true
           push: false
-          tags: tap-mcp-server:test
-          build-args: |
-            RUST_VERSION=${{ env.RUST_VERSION }}
+          tags: tap-mcp-server:local
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        # Trivy exits 1 when findings are present; without continue-on-error
+        # the SARIF upload would be skipped and findings lost.
+        continue-on-error: true
+        with:
+          image-ref: tap-mcp-server:local
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          limit-severities-for-sarif: true
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
 
   # Aggregate gate
   ci-success:
@@ -357,7 +398,7 @@ jobs:
       - build-tests
       - test
       - coverage
-      - docker
+      - docker-build-and-scan
     runs-on: ubuntu-latest
     if: always()
     permissions: {}
@@ -373,7 +414,7 @@ jobs:
             "${{ needs.build-tests.result }}"
             "${{ needs.test.result }}"
             "${{ needs.coverage.result }}"
-            "${{ needs.docker.result }}"
+            "${{ needs.docker-build-and-scan.result }}"
           )
           for r in "${results[@]}"; do
             if [[ "$r" != "success" && "$r" != "skipped" ]]; then

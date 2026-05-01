@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - CI overhaul (`.github/workflows/ci.yml`): unified test build via `cargo nextest archive` (built once with `sccache`, replayed by the `test` matrix from the uploaded artifact); added a `coverage` job using `cargo-llvm-cov nextest` with Codecov upload on master pushes; dropped the dedicated release-build job — only debug builds remain. `Swatinem/rust-cache` is now per-job (`ci-check`, `ci-deny`, `ci-msrv`, `ci-features`, `ci-udeps`, `ci-build-${os}`, `ci-coverage`) and runs with `cache-targets: false` on sccache-enabled jobs to keep the two caches from clashing on `target/`.
 - New `[profile.ci]` (inherits `dev`, `debug = 0`, `codegen-units = 16`) and `.github/nextest.toml` (`ci`, `ci-partition` profiles with slow-test surfacing) drive the archive workflow.
+- Docker job (`docker-build-and-scan`) reuses the `tap-mcp-server` binary produced by `build-tests` instead of rebuilding from source. New `docker/Dockerfile` is a runtime-only image (Ubuntu 24.04 to match the GHA runner glibc) that copies the prebuilt binary; the legacy root-level multi-stage `Dockerfile` is kept for ad-hoc end-to-end builds. Trivy now scans the built image and uploads SARIF findings to the GitHub Security tab (CRITICAL/HIGH severities).
 
 ### Fixed
 
