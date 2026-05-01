@@ -2,10 +2,13 @@
 //!
 //! This module defines TOML-deserializable configuration structures for merchants.
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    net::{Ipv4Addr, Ipv6Addr},
+};
 
 use serde::Deserialize;
-use url::Url;
+use url::{Host, Url};
 
 use crate::error::{BridgeError, Result};
 
@@ -103,34 +106,67 @@ impl MerchantConfig {
 
     /// Validates the base URL.
     fn validate_base_url(&self) -> Result<()> {
-        let url = Url::parse(&self.base_url).map_err(|e| {
-            BridgeError::MerchantConfigError(format!("invalid base_url '{}': {e}", self.base_url))
-        })?;
+        validate_https_url("base_url", &self.base_url)
+    }
+}
 
-        // Must be HTTPS
-        if url.scheme() != "https" {
-            return Err(BridgeError::MerchantConfigError(format!(
-                "base_url must use HTTPS, got: {}",
-                url.scheme()
-            )));
-        }
+/// Shared HTTPS URL validator used for `base_url` and OAuth token URLs.
+///
+/// Rejects:
+/// - non-HTTPS schemes
+/// - loopback hosts in any spelling (`localhost`, `127.0.0.0/8`, `::1`, IPv4-mapped IPv6 loopback
+///   such as `::ffff:127.0.0.1`)
+/// - the unspecified address (`0.0.0.0`, `::`)
+/// - URLs that embed userinfo (`https://user:pass@host`)
+/// - explicit port `0`
+fn validate_https_url(label: &str, url_str: &str) -> Result<()> {
+    let url = Url::parse(url_str).map_err(|e| {
+        BridgeError::MerchantConfigError(format!("invalid {label} '{url_str}': {e}"))
+    })?;
 
-        // Check for localhost/loopback
-        if let Some(host) = url.host_str() {
-            let host_lower = host.to_lowercase();
-            if host_lower == "localhost"
-                || host_lower == "127.0.0.1"
-                || host_lower == "::1"
-                || host_lower.starts_with("127.")
-                || host_lower == "[::1]"
-            {
-                return Err(BridgeError::MerchantConfigError(format!(
-                    "base_url must not be localhost or loopback: {host}"
-                )));
+    if url.scheme() != "https" {
+        return Err(BridgeError::MerchantConfigError(format!(
+            "{label} must use HTTPS, got: {}",
+            url.scheme()
+        )));
+    }
+
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(BridgeError::MerchantConfigError(format!(
+            "{label} must not contain userinfo (username/password)"
+        )));
+    }
+
+    if url.port() == Some(0) {
+        return Err(BridgeError::MerchantConfigError(format!("{label} must not use port 0")));
+    }
+
+    if let Some(host) = url.host()
+        && host_is_disallowed(&host)
+    {
+        return Err(BridgeError::MerchantConfigError(format!(
+            "{label} must not be localhost, loopback, or unspecified address: {host}"
+        )));
+    }
+
+    Ok(())
+}
+
+/// Returns `true` if `host` is a forbidden destination for outbound TAP traffic.
+///
+/// Catches every spelling of loopback (`localhost`, `127.0.0.0/8`, `::1`,
+/// IPv4-mapped IPv6 loopback) and the unspecified addresses `0.0.0.0` / `::`.
+fn host_is_disallowed(host: &Host<&str>) -> bool {
+    match *host {
+        Host::Domain(domain) => domain.eq_ignore_ascii_case("localhost"),
+        Host::Ipv4(addr) => addr.is_loopback() || addr == Ipv4Addr::UNSPECIFIED,
+        Host::Ipv6(addr) => {
+            if addr.is_loopback() || addr == Ipv6Addr::UNSPECIFIED {
+                return true;
             }
+            addr.to_ipv4_mapped()
+                .is_some_and(|v4| v4.is_loopback() || v4 == Ipv4Addr::UNSPECIFIED)
         }
-
-        Ok(())
     }
 }
 
@@ -170,6 +206,7 @@ impl EndpointConfig {
     /// - Do not contain path traversal sequences (`..`, `//`)
     /// - Do not start with absolute paths on Windows (`C:`, `D:`, etc.)
     /// - Start with `/` (relative paths only)
+    /// - Do not contain NUL bytes, query strings (`?`), fragments (`#`), or whitespace
     ///
     /// # Errors
     ///
@@ -226,6 +263,33 @@ pub(crate) fn validate_endpoint_path(name: &str, path: &str) -> Result<()> {
         )));
     }
 
+    // Reject NUL bytes (undefined wire behavior).
+    if path.contains('\0') {
+        return Err(BridgeError::MerchantConfigError(format!(
+            "endpoint '{name}' contains null byte"
+        )));
+    }
+
+    // Endpoint templates are paths only; query parameters are appended by
+    // `build_url_with_query` and fragments are not server-visible.
+    if path.contains('?') {
+        return Err(BridgeError::MerchantConfigError(format!(
+            "endpoint '{name}' must not contain query string '?': {path}"
+        )));
+    }
+
+    if path.contains('#') {
+        return Err(BridgeError::MerchantConfigError(format!(
+            "endpoint '{name}' must not contain fragment '#': {path}"
+        )));
+    }
+
+    if path.chars().any(char::is_whitespace) {
+        return Err(BridgeError::MerchantConfigError(format!(
+            "endpoint '{name}' must not contain whitespace: {path}"
+        )));
+    }
+
     Ok(())
 }
 
@@ -256,7 +320,8 @@ impl FieldMappingConfig {
     /// Validates field mapping names for security issues.
     ///
     /// Checks that field mapping names:
-    /// - Do not contain JavaScript prototype pollution patterns
+    /// - Are not empty
+    /// - Do not contain JavaScript prototype pollution patterns (case-insensitive)
     /// - Do not contain SQL-like injection patterns
     /// - Do not contain null bytes
     ///
@@ -280,8 +345,19 @@ impl FieldMappingConfig {
 
 /// Validates a field name for security issues.
 pub(crate) fn validate_field_name(context: &str, name: &str) -> Result<()> {
-    // Check for forbidden names (prototype pollution)
-    if FORBIDDEN_FIELD_NAMES.contains(&name) {
+    // Empty field names produce invalid JSON keys.
+    if name.is_empty() {
+        return Err(BridgeError::MerchantConfigError(format!("{context} must not be empty")));
+    }
+
+    // Check for forbidden names (prototype pollution).
+    // Case-insensitive: `__PROTO__` is just as dangerous as `__proto__` once the
+    // receiving JS runtime lowercases or normalises before lookup.
+    let name_lower = name.to_lowercase();
+    if FORBIDDEN_FIELD_NAMES
+        .iter()
+        .any(|forbidden| forbidden.eq_ignore_ascii_case(&name_lower))
+    {
         return Err(BridgeError::MerchantConfigError(format!(
             "{context} contains forbidden name: {name}"
         )));
@@ -293,7 +369,6 @@ pub(crate) fn validate_field_name(context: &str, name: &str) -> Result<()> {
     }
 
     // Check for SQL-like patterns (basic detection)
-    let name_lower = name.to_lowercase();
     if name_lower.contains("'; drop")
         || name_lower.contains("-- ")
         || name_lower.contains("/*")
@@ -412,33 +487,7 @@ fn validate_header_name(name: &str) -> Result<()> {
 
 /// Validates an `OAuth2` token URL.
 fn validate_oauth_token_url(url: &str) -> Result<()> {
-    let parsed = Url::parse(url).map_err(|e| {
-        BridgeError::MerchantConfigError(format!("invalid OAuth2 token_url '{url}': {e}"))
-    })?;
-
-    // Must be HTTPS
-    if parsed.scheme() != "https" {
-        return Err(BridgeError::MerchantConfigError(format!(
-            "OAuth2 token_url must use HTTPS, got: {}",
-            parsed.scheme()
-        )));
-    }
-
-    // Check for localhost/loopback
-    if let Some(host) = parsed.host_str() {
-        let host_lower = host.to_lowercase();
-        if host_lower == "localhost"
-            || host_lower == "127.0.0.1"
-            || host_lower == "::1"
-            || host_lower.starts_with("127.")
-        {
-            return Err(BridgeError::MerchantConfigError(format!(
-                "OAuth2 token_url must not be localhost or loopback: {host}"
-            )));
-        }
-    }
-
-    Ok(())
+    validate_https_url("OAuth2 token_url", url)
 }
 
 /// Pagination style used by merchant.
@@ -1027,5 +1076,143 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("SQL pattern"));
+    }
+
+    // Regression tests for issue #150 — validator hardening.
+
+    fn config_with_base_url(base_url: &str) -> MerchantConfig {
+        MerchantConfig {
+            name: "Test".to_owned(),
+            base_url: base_url.to_owned(),
+            ..Default::default()
+        }
+    }
+
+    fn config_with_oauth_token_url(token_url: &str) -> MerchantConfig {
+        MerchantConfig {
+            name: "Test".to_owned(),
+            base_url: "https://api.example.com".to_owned(),
+            auth: Some(AuthConfig::OAuth2 {
+                token_url: token_url.to_owned(),
+                client_id_env: "CLIENT_ID".to_owned(),
+                client_secret_env: "CLIENT_SECRET".to_owned(),
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn config_with_endpoint(path: &str) -> MerchantConfig {
+        MerchantConfig {
+            name: "Test".to_owned(),
+            base_url: "https://api.example.com".to_owned(),
+            endpoints: EndpointConfig { products: Some(path.to_owned()), ..Default::default() },
+            ..Default::default()
+        }
+    }
+
+    fn config_with_field_request_key(key: &str) -> MerchantConfig {
+        let mut request = HashMap::new();
+        request.insert(key.to_owned(), "value".to_owned());
+        MerchantConfig {
+            name: "Test".to_owned(),
+            base_url: "https://api.example.com".to_owned(),
+            field_mappings: FieldMappingConfig { request, response: HashMap::new() },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_validate_base_url_rejects_unspecified_v4() {
+        let result = config_with_base_url("https://0.0.0.0").validate();
+        assert!(result.is_err(), "0.0.0.0 should be rejected");
+        assert!(result.unwrap_err().to_string().contains("unspecified address"));
+    }
+
+    #[test]
+    fn test_validate_base_url_rejects_ipv4_mapped_ipv6_loopback() {
+        let result = config_with_base_url("https://[::ffff:7f00:1]").validate();
+        assert!(result.is_err(), "IPv4-mapped IPv6 loopback should be rejected");
+    }
+
+    #[test]
+    fn test_validate_base_url_rejects_userinfo() {
+        let result = config_with_base_url("https://user:pass@merchant.example.com").validate();
+        assert!(result.is_err(), "URL with userinfo should be rejected");
+        assert!(result.unwrap_err().to_string().contains("userinfo"));
+    }
+
+    #[test]
+    fn test_validate_base_url_rejects_127_x_loopback() {
+        let result = config_with_base_url("https://127.10.20.30/api").validate();
+        assert!(result.is_err(), "127.0.0.0/8 loopback range should be rejected");
+    }
+
+    #[test]
+    fn test_validate_oauth_token_url_rejects_bracketed_ipv6_loopback() {
+        let result = config_with_oauth_token_url("https://[::1]/token").validate();
+        assert!(result.is_err(), "[::1] should be rejected for OAuth2 token URL");
+    }
+
+    #[test]
+    fn test_validate_oauth_token_url_rejects_userinfo() {
+        let result =
+            config_with_oauth_token_url("https://user:pass@idp.example.com/token").validate();
+        assert!(result.is_err(), "OAuth2 token URL with userinfo should be rejected");
+        assert!(result.unwrap_err().to_string().contains("userinfo"));
+    }
+
+    #[test]
+    fn test_validate_oauth_token_url_rejects_port_zero() {
+        let result = config_with_oauth_token_url("https://idp.example.com:0/token").validate();
+        assert!(result.is_err(), "port 0 should be rejected");
+        assert!(result.unwrap_err().to_string().contains("port 0"));
+    }
+
+    #[test]
+    fn test_validate_endpoint_rejects_null_byte() {
+        let result = config_with_endpoint("/products\0evil").validate();
+        assert!(result.is_err(), "endpoint with NUL byte should be rejected");
+        assert!(result.unwrap_err().to_string().contains("null byte"));
+    }
+
+    #[test]
+    fn test_validate_endpoint_rejects_query_string() {
+        let result = config_with_endpoint("/products?inject=1").validate();
+        assert!(result.is_err(), "endpoint with query string should be rejected");
+        assert!(result.unwrap_err().to_string().contains("query string"));
+    }
+
+    #[test]
+    fn test_validate_endpoint_rejects_fragment() {
+        let result = config_with_endpoint("/products#fragment").validate();
+        assert!(result.is_err(), "endpoint with fragment should be rejected");
+        assert!(result.unwrap_err().to_string().contains("fragment"));
+    }
+
+    #[test]
+    fn test_validate_endpoint_rejects_whitespace() {
+        let result = config_with_endpoint("/prod ucts").validate();
+        assert!(result.is_err(), "endpoint with whitespace should be rejected");
+        assert!(result.unwrap_err().to_string().contains("whitespace"));
+    }
+
+    #[test]
+    fn test_validate_field_name_uppercase_proto_rejected() {
+        let result = config_with_field_request_key("__PROTO__").validate();
+        assert!(result.is_err(), "uppercase __PROTO__ should be rejected (case-insensitive)");
+        assert!(result.unwrap_err().to_string().contains("forbidden name"));
+    }
+
+    #[test]
+    fn test_validate_field_name_mixed_case_constructor_rejected() {
+        let result = config_with_field_request_key("Constructor").validate();
+        assert!(result.is_err(), "mixed-case Constructor should be rejected");
+    }
+
+    #[test]
+    fn test_validate_field_name_empty_rejected() {
+        let result = config_with_field_request_key("").validate();
+        assert!(result.is_err(), "empty field name should be rejected");
+        assert!(result.unwrap_err().to_string().contains("must not be empty"));
     }
 }
