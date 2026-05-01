@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `TAP_ALLOW_LOOPBACK=1` developer escape hatch in `parse_merchant_url`: when set, the function accepts `http://localhost`, `http://127.0.0.1`, and their `https` counterparts so wiremock-style harnesses can drive the full request-response loop end to end. The override is scoped to loopback hosts — non-loopback `http://` URLs are still rejected — and is documented as dev-only; it must never be set in production (#126)
 
+### Changed
+
+- CI overhaul (`.github/workflows/ci.yml`): unified test build via `cargo nextest archive` (built once with `sccache`, replayed by the `test` matrix from the uploaded artifact); added a `coverage` job using `cargo-llvm-cov nextest` with Codecov upload on master pushes; dropped the dedicated release-build job — only debug builds remain. `Swatinem/rust-cache` is now per-job (`ci-check`, `ci-deny`, `ci-msrv`, `ci-features`, `ci-udeps`, `ci-build-${os}`, `ci-coverage`) and runs with `cache-targets: false` on sccache-enabled jobs to keep the two caches from clashing on `target/`.
+- New `[profile.ci]` (inherits `dev`, `debug = 0`, `codegen-units = 16`) and `.github/nextest.toml` (`ci`, `ci-partition` profiles with slow-test surfacing) drive the archive workflow.
+
 ### Fixed
 
 - `tap-mcp-server` exited immediately after responding to `initialize`, dropping every subsequent request. Under rmcp 1.5, `Service::serve(transport)` resolves at initialization and returns a `RunningService` whose background task drives the request loop; the server now awaits `RunningService::waiting()` so the connection lives for its full lifetime (#118)
