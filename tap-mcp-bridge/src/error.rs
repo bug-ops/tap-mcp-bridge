@@ -188,6 +188,25 @@ pub enum BridgeError {
     #[error("Replay attack detected")]
     ReplayAttack,
 
+    /// Replay-protection cache saturated.
+    ///
+    /// The verifier holds nonces until their signature validity window expires
+    /// (TTL-driven eviction). When the cache is full of still-valid nonces,
+    /// fresh requests are rejected fail-closed rather than evicting unexpired
+    /// entries — silently dropping a still-valid nonce would shorten the
+    /// replay-protection window and let an attacker replay an evicted-but-unexpired
+    /// signature.
+    ///
+    /// # Recovery
+    ///
+    /// This indicates the verifier capacity is below the workload's peak RPS
+    /// times the 8-minute TAP validity window. Increase `TapVerifier::new`
+    /// capacity (recommended: `peak_RPS * 540` to cover the validity window plus
+    /// clock-skew tolerance) or apply upstream rate limiting. Requests rejected
+    /// with this error are safe to retry once the cache drains.
+    #[error("Replay-protection cache saturated; refusing fresh request to preserve replay window")]
+    ReplayCacheSaturated,
+
     /// Request too old.
     ///
     /// This error occurs when the request timestamp is outside the allowed window.

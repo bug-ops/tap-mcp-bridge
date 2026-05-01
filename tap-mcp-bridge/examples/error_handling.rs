@@ -232,6 +232,13 @@ fn handle_checkout_result(result: Result<tap_mcp_bridge::mcp::CheckoutResult, Br
             eprintln!("   → Fix: Ensure request is sent immediately after signing");
         }
 
+        Err(BridgeError::ReplayCacheSaturated) => {
+            eprintln!("   ✗ Replay-protection cache saturated");
+            eprintln!("   → Fix: Increase TapVerifier capacity (peak_RPS × 540)");
+            eprintln!("   → Fix: Apply upstream rate limiting");
+            eprintln!("   → Retry: Safe to retry once the cache drains");
+        }
+
         Err(BridgeError::RateLimitExceeded) => {
             eprintln!("   ✗ Rate limit exceeded");
             eprintln!("   → Fix: Reduce request frequency");
