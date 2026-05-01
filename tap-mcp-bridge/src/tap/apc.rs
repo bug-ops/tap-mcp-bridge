@@ -64,72 +64,13 @@
 //! ```
 
 use ed25519_dalek::SigningKey;
-use josekit::jwe::{JweEncrypter, RSA_OAEP_256};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use signature::Signer;
 use zeroize::Zeroize;
 
 use crate::error::{BridgeError, Result};
-
-/// RSA public key for JWE encryption.
-///
-/// Represents a merchant's RSA public key used for encrypting payment data
-/// in the APC. The key must be at least 2048 bits and in PEM format.
-///
-/// # Examples
-///
-/// ```no_run
-/// use tap_mcp_bridge::tap::apc::RsaPublicKey;
-///
-/// let pem = r#"-----BEGIN PUBLIC KEY-----
-/// ...
-/// -----END PUBLIC KEY-----"#;
-///
-/// let public_key = RsaPublicKey::from_pem(pem.as_bytes())?;
-/// # Ok::<(), tap_mcp_bridge::error::BridgeError>(())
-/// ```
-#[derive(Debug, Clone)]
-pub struct RsaPublicKey {
-    encrypter: Box<dyn JweEncrypter>,
-}
-
-impl RsaPublicKey {
-    /// Creates an RSA public key from PEM-encoded data.
-    ///
-    /// # Arguments
-    ///
-    /// * `pem` - PEM-encoded RSA public key
-    ///
-    /// # Errors
-    ///
-    /// Returns [`BridgeError::CryptoError`] if:
-    /// - PEM format is invalid
-    /// - Key is not an RSA public key
-    /// - Key size is insufficient (<2048 bits)
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use tap_mcp_bridge::tap::apc::RsaPublicKey;
-    ///
-    /// let pem = std::fs::read("merchant_public_key.pem")?;
-    /// let public_key = RsaPublicKey::from_pem(&pem)?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// ```
-    pub fn from_pem(pem: &[u8]) -> Result<Self> {
-        let encrypter = RSA_OAEP_256
-            .encrypter_from_pem(pem)
-            .map_err(|e| BridgeError::CryptoError(format!("failed to load RSA public key: {e}")))?;
-
-        Ok(Self { encrypter: Box::new(encrypter) })
-    }
-
-    /// Returns the encrypter for JWE operations.
-    fn encrypter(&self) -> &dyn JweEncrypter {
-        self.encrypter.as_ref()
-    }
-}
+pub use crate::tap::jwe::RsaPublicKey;
 
 /// Agentic Payment Container (APC).
 ///
@@ -413,23 +354,8 @@ impl PaymentMethod {
     /// # }
     /// ```
     pub fn encrypt(&self, merchant_public_key: &RsaPublicKey) -> Result<String> {
-        // Serialize payment method to JSON
         let json = self.to_json()?;
-
-        // Create JWE header with RSA-OAEP-256 and A256GCM
-        let mut header = josekit::jwe::JweHeader::new();
-        header.set_algorithm("RSA-OAEP-256");
-        header.set_content_encryption("A256GCM");
-
-        // Encrypt to JWE compact serialization (5 parts: header.key.iv.ciphertext.tag)
-        let jwe = josekit::jwe::serialize_compact(
-            json.as_bytes(),
-            &header,
-            merchant_public_key.encrypter(),
-        )
-        .map_err(|e| BridgeError::CryptoError(format!("JWE encryption failed: {e}")))?;
-
-        Ok(jwe)
+        merchant_public_key.encrypt_compact(json.as_bytes())
     }
 
     /// Serializes payment method to JSON.
@@ -1008,7 +934,7 @@ mwIDAQAB
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)] // Miri can't run OpenSSL FFI calls
+    #[cfg_attr(miri, ignore)] // Miri can't run aws-lc-rs FFI calls
     fn test_payment_method_card_encryption() {
         let card = CardData {
             number: "4111111111111111".to_owned(),
@@ -1029,7 +955,7 @@ mwIDAQAB
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)] // Miri can't run OpenSSL FFI calls
+    #[cfg_attr(miri, ignore)] // Miri can't run aws-lc-rs FFI calls
     fn test_payment_method_bank_account_encryption() {
         let account = BankAccountData {
             account_number: "1234567890".to_owned(),
@@ -1048,7 +974,7 @@ mwIDAQAB
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)] // Miri can't run OpenSSL FFI calls
+    #[cfg_attr(miri, ignore)] // Miri can't run aws-lc-rs FFI calls
     fn test_payment_method_digital_wallet_encryption() {
         let wallet = DigitalWalletData {
             wallet_type: "apple_pay".to_owned(),

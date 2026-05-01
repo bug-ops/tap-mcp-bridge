@@ -185,14 +185,6 @@ jobs:
         if: runner.os == 'Linux'
         uses: rui314/setup-mold@v1
 
-      # josekit links against system OpenSSL on non-Windows targets (see
-      # tap-mcp-bridge/Cargo.toml). ubuntu-latest already has libssl-dev;
-      # macos-latest needs OPENSSL_DIR pointing at the brew install so
-      # openssl-sys skips its 50s vendored build.
-      - name: Configure system OpenSSL on macOS
-        if: runner.os == 'macOS'
-        run: echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
-
       # cache-targets: false because sccache already caches build artifacts —
       # leaving target/ out of the action prevents the two caches from clashing.
       - name: Cache Cargo (registry only)
@@ -209,10 +201,6 @@ jobs:
         with:
           tool: nextest
 
-      # Use a folded scalar (no shell line-continuation) so we keep the runner's
-      # default shell on every OS. On Windows, `shell: bash` loads MSYS perl,
-      # which lacks Locale::Maketext::Simple and breaks josekit's vendored
-      # OpenSSL build; pwsh defaults find Strawberry Perl correctly.
       - name: Build and archive tests
         run: >-
           cargo nextest archive

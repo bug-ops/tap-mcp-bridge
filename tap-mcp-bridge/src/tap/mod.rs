@@ -173,6 +173,7 @@ pub(crate) const CLOCK_SKEW_TOLERANCE_SECS: u64 = 60;
 
 pub mod acro;
 pub mod apc;
+pub mod jwe;
 pub mod jwk;
 pub mod jwt;
 pub mod signer;
