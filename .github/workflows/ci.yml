@@ -45,7 +45,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "ci-check"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Check formatting
         run: cargo +nightly fmt --all -- --check
@@ -76,7 +75,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "ci-deny"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Install cargo-deny
         uses: taiki-e/install-action@v2
@@ -109,7 +107,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "ci-msrv"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: cargo check (MSRV, --all-features --locked)
         run: cargo check --workspace --all-targets --all-features --locked
@@ -129,7 +126,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "ci-features"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Install cargo-hack
         uses: taiki-e/install-action@v2
@@ -154,7 +150,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "ci-udeps"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Install cargo-udeps
         uses: taiki-e/install-action@v2
@@ -190,7 +185,6 @@ jobs:
         with:
           shared-key: "ci-build-${{ matrix.os }}"
           cache-targets: "false"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
