@@ -194,7 +194,7 @@ jobs:
           cache-targets: "false"
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install nextest
         uses: taiki-e/install-action@v2
@@ -250,7 +250,7 @@ jobs:
           cache-targets: "false"
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Build server binary
         run: cargo build --bin tap-mcp-server --profile ci
@@ -334,7 +334,7 @@ jobs:
           cache-targets: "false"
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@v2
@@ -404,7 +404,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         # Trivy exits 1 when findings are present; without continue-on-error
         # the SARIF upload would be skipped and findings lost.
         continue-on-error: true
