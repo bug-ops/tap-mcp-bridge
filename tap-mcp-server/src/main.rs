@@ -8,7 +8,10 @@
 //! The server is configured via environment variables:
 //! - `TAP_AGENT_ID`: Agent identifier (required, alphanumeric + `-_`, max 64 chars)
 //! - `TAP_AGENT_DIRECTORY`: Agent directory URL (required, must be HTTPS)
-//! - `TAP_SIGNING_KEY`: Ed25519 private key in hex format (required, 64 hex chars)
+//! - `TAP_SIGNING_KEY`: Ed25519 private key in hex format (required, 64 hex chars). Must have
+//!   actual entropy — placeholder seeds whose 32 decoded bytes are all identical (e.g. all `0x00`,
+//!   all `0xff`) are rejected since they yield a publicly-known keypair. Generate with `openssl
+//!   rand -hex 32`.
 //! - `RUST_LOG`: Log level (optional, default: "info")
 //!
 //! # Example
@@ -16,7 +19,7 @@
 //! ```bash
 //! export TAP_AGENT_ID="agent-123"
 //! export TAP_AGENT_DIRECTORY="https://agent.example.com"
-//! export TAP_SIGNING_KEY="0123456789abcdef..."  # 64 hex chars
+//! export TAP_SIGNING_KEY="$(openssl rand -hex 32)"  # 64 hex chars, real entropy
 //! export RUST_LOG="info"
 //! tap-mcp-server
 //! ```
@@ -72,7 +75,11 @@ struct Config {
     agent_id: String,
     /// Agent directory URL (must be HTTPS)
     agent_directory: String,
-    /// Ed25519 signing key in hex format (64 hex chars = 32 bytes)
+    /// Ed25519 signing key in hex format (64 hex chars = 32 bytes).
+    ///
+    /// Must have real entropy — placeholder seeds whose decoded bytes are all
+    /// identical (all-zero, all-ones, etc.) yield a publicly-known keypair and
+    /// are rejected by `validate_signing_key`. Generate with `openssl rand -hex 32`.
     signing_key_hex: String,
 }
 
@@ -204,7 +211,19 @@ impl Config {
         Ok(())
     }
 
-    /// Validates signing key is exactly 64 hex characters (32 bytes).
+    /// Validates signing key format and entropy.
+    ///
+    /// Enforces:
+    /// - Exactly 64 hex characters (32 bytes after decoding).
+    /// - Alphabet limited to `[0-9a-fA-F]`.
+    /// - The decoded 32-byte seed is not a placeholder pattern where every byte is identical
+    ///   (covers all-zero, all-ones, and any all-bytes-equal seed). Such seeds yield publicly-known
+    ///   Ed25519 keypairs — anyone using the same placeholder produces the same private key — so
+    ///   accepting them is a silent impersonation surface.
+    ///
+    /// Stricter randomness tests (Shannon entropy, NIST SP 800-22) are out of
+    /// scope for a one-shot startup validator; the all-bytes-equal check rejects
+    /// the operator-mistake cases that motivate this guard.
     fn validate_signing_key(key_hex: &str) -> Result<()> {
         if key_hex.len() != 64 {
             bail!(
@@ -215,6 +234,20 @@ impl Config {
 
         if !key_hex.chars().all(|c| c.is_ascii_hexdigit()) {
             bail!("TAP_SIGNING_KEY must contain only hexadecimal characters (0-9, a-f, A-F)");
+        }
+
+        let bytes = hex::decode(key_hex).context(
+            "TAP_SIGNING_KEY failed to hex-decode after passing length and alphabet checks",
+        )?;
+
+        if let Some((&first, rest)) = bytes.split_first()
+            && rest.iter().all(|&b| b == first)
+        {
+            bail!(
+                "TAP_SIGNING_KEY appears to be a placeholder with no entropy (all 32 bytes equal \
+                 0x{first:02x}). All-bytes-equal seeds yield publicly-known Ed25519 keypairs. \
+                 Generate a real seed with: openssl rand -hex 32"
+            );
         }
 
         Ok(())
@@ -1260,14 +1293,46 @@ mod tests {
 
     #[test]
     fn test_validate_signing_key() {
-        // Valid keys
-        assert!(Config::validate_signing_key(&"0".repeat(64)).is_ok());
+        // Valid keys: alternating bytes provide non-zero entropy under the
+        // all-bytes-equal check.
         assert!(Config::validate_signing_key(&"abcdef0123456789".repeat(4)).is_ok());
+        assert!(Config::validate_signing_key(&"0123456789abcdef".repeat(4)).is_ok());
 
-        // Invalid keys
+        // Invalid: wrong length.
         assert!(Config::validate_signing_key(&"0".repeat(63)).is_err());
         assert!(Config::validate_signing_key(&"0".repeat(65)).is_err());
         assert!(Config::validate_signing_key("not-hex-chars!!!").is_err());
+    }
+
+    #[test]
+    fn test_validate_signing_key_rejects_all_zero_seed() {
+        // Regression for #148: the all-zero seed produces a publicly-known
+        // Ed25519 keypair (`3b6a27bc...da29`). Must be rejected with a message
+        // that mentions entropy and points the operator at `openssl rand -hex 32`.
+        let err = Config::validate_signing_key(&"0".repeat(64)).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("placeholder"), "expected entropy diagnostic, got: {msg}");
+        assert!(msg.contains("openssl rand -hex 32"), "expected generator hint, got: {msg}");
+    }
+
+    #[test]
+    fn test_validate_signing_key_rejects_all_ones_seed() {
+        // Regression for #148: 32 × 0xff is the second obvious operator
+        // placeholder; must be rejected for the same reason as all-zero.
+        let err = Config::validate_signing_key(&"f".repeat(64)).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("placeholder"), "expected entropy diagnostic, got: {msg}");
+    }
+
+    #[test]
+    fn test_validate_signing_key_rejects_all_bytes_equal_seed() {
+        // Regression for #148: any seed whose 32 bytes are all the same byte
+        // value (here 0xab) collapses to a deterministic, publicly-derivable
+        // keypair. The all-bytes-equal check must catch every such pattern,
+        // not just 0x00 and 0xff.
+        let err = Config::validate_signing_key(&"ab".repeat(32)).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("0xab"), "expected byte value in diagnostic, got: {msg}");
     }
 
     #[test]
@@ -1275,7 +1340,7 @@ mod tests {
         let config = Config {
             agent_id: "test-agent".to_owned(),
             agent_directory: "https://agent.example.com".to_owned(),
-            signing_key_hex: "0".repeat(64),
+            signing_key_hex: "abcdef0123456789".repeat(4),
         };
 
         let result = create_signer(&config);
