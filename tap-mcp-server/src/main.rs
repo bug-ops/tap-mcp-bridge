@@ -128,7 +128,26 @@ impl Config {
         Ok(())
     }
 
-    /// Validates agent directory is a valid HTTPS URL.
+    /// Validates agent directory is a valid, externally reachable HTTPS URL.
+    ///
+    /// `TAP_AGENT_DIRECTORY` flows into the `Signature-Agent` HTTP header on
+    /// every outbound TAP request, the `iss` claim of every JWT ID token, and
+    /// the `kid` URL fragment merchants use to fetch the agent's JWKS. A
+    /// misconfigured directory therefore breaks signature verification on the
+    /// merchant side without the bridge surfacing any error locally.
+    ///
+    /// The validator rejects:
+    /// - non-`https://` schemes (HTTPS is mandatory; no loopback escape hatch here — the directory
+    ///   is operator-controlled and is supposed to be reachable from merchants on the public
+    ///   internet);
+    /// - loopback hosts (`localhost`, `127.0.0.1`, `[::1]`) — merchants cannot fetch JWKS from the
+    ///   agent's own loopback;
+    /// - URLs containing userinfo (`https://user:pass@host`) — credentials would leak into the
+    ///   `Signature-Agent` header;
+    /// - port `0` — invalid for client connections;
+    /// - paths containing `.` or `..` segments — `url::Url::parse` silently normalises
+    ///   `/foo/../bar` to `/bar`, which diverges from the literal string the operator typed
+    ///   (mirrors the #142 / spec-004 defense).
     fn validate_agent_directory(url_str: &str) -> Result<()> {
         if !url_str.starts_with("https://") {
             bail!(
@@ -137,10 +156,50 @@ impl Config {
             );
         }
 
-        // Basic URL validation
-        url::Url::parse(url_str).with_context(|| {
+        let url = url::Url::parse(url_str).with_context(|| {
             format!("TAP_AGENT_DIRECTORY must be a valid HTTPS URL. Got: '{url_str}'")
         })?;
+
+        let host = url.host_str().ok_or_else(|| {
+            anyhow::anyhow!("TAP_AGENT_DIRECTORY must have a host component. Got: '{url_str}'")
+        })?;
+
+        // `url::Url::host_str` returns IPv6 hosts wrapped in brackets, e.g.
+        // `[::1]`, while bare hostnames are returned without decoration.
+        if matches!(host, "localhost" | "127.0.0.1" | "[::1]") {
+            bail!(
+                "TAP_AGENT_DIRECTORY must not point to a loopback host (got '{host}'). Merchants \
+                 cannot fetch JWKS from the agent's loopback interface."
+            );
+        }
+
+        if !url.username().is_empty() || url.password().is_some() {
+            bail!(
+                "TAP_AGENT_DIRECTORY must not contain userinfo (username or password). The URL is \
+                 sent verbatim in the Signature-Agent header on every TAP request."
+            );
+        }
+
+        if url.port() == Some(0) {
+            bail!("TAP_AGENT_DIRECTORY port 0 is invalid for client connections");
+        }
+
+        // Check the original string for `.` / `..` segments before parsing
+        // normalises them away. `url::Url::parse` collapses `/foo/../bar` to
+        // `/bar`, hiding operator typos that would otherwise produce a wrong
+        // `Signature-Agent` URL in the wire request.
+        if let Some(after_authority) = url_str
+            .split_once("://")
+            .and_then(|(_, rest)| rest.split_once('/').map(|(_, path_and_after)| path_and_after))
+        {
+            let path_only = after_authority.split(['?', '#']).next().unwrap_or("");
+            if path_only.split('/').any(|seg| seg == "." || seg == "..") {
+                bail!(
+                    "TAP_AGENT_DIRECTORY must not contain '.' or '..' path segments. Got: \
+                     '{url_str}'"
+                );
+            }
+        }
 
         Ok(())
     }
@@ -1145,12 +1204,58 @@ mod tests {
     fn test_validate_agent_directory() {
         // Valid URLs
         assert!(Config::validate_agent_directory("https://agent.example.com").is_ok());
-        assert!(Config::validate_agent_directory("https://localhost:8080").is_ok());
+        assert!(Config::validate_agent_directory("https://agent.example.com/").is_ok());
+        assert!(
+            Config::validate_agent_directory("https://agent.example.com:8443/.well-known/").is_ok()
+        );
 
-        // Invalid URLs
+        // Scheme rejections
         assert!(Config::validate_agent_directory("http://agent.example.com").is_err());
         assert!(Config::validate_agent_directory("agent.example.com").is_err());
         assert!(Config::validate_agent_directory("").is_err());
+        assert!(Config::validate_agent_directory("file:///etc/passwd").is_err());
+        assert!(Config::validate_agent_directory("javascript:alert(1)").is_err());
+    }
+
+    /// Issue #149: loopback hosts must be rejected — merchants on the public
+    /// internet cannot fetch JWKS from the agent's own loopback interface.
+    #[test]
+    fn test_validate_agent_directory_rejects_loopback() {
+        assert!(Config::validate_agent_directory("https://localhost").is_err());
+        assert!(Config::validate_agent_directory("https://localhost:8080").is_err());
+        assert!(Config::validate_agent_directory("https://localhost:8080/").is_err());
+        assert!(Config::validate_agent_directory("https://127.0.0.1").is_err());
+        assert!(Config::validate_agent_directory("https://127.0.0.1:8080").is_err());
+        assert!(Config::validate_agent_directory("https://[::1]").is_err());
+        assert!(Config::validate_agent_directory("https://[::1]:8080").is_err());
+    }
+
+    /// Issue #149: userinfo in the URL would leak credentials into the
+    /// `Signature-Agent` header on every TAP request.
+    #[test]
+    fn test_validate_agent_directory_rejects_userinfo() {
+        assert!(Config::validate_agent_directory("https://user@agent.example.com").is_err());
+        assert!(Config::validate_agent_directory("https://user:pass@agent.example.com").is_err());
+        assert!(Config::validate_agent_directory("https://:pass@agent.example.com").is_err());
+    }
+
+    /// Issue #149: port 0 is the wildcard "any-port" sentinel and is invalid
+    /// for outbound client connections.
+    #[test]
+    fn test_validate_agent_directory_rejects_port_zero() {
+        assert!(Config::validate_agent_directory("https://agent.example.com:0").is_err());
+        assert!(Config::validate_agent_directory("https://agent.example.com:0/").is_err());
+    }
+
+    /// Issue #149: `url::Url::parse` silently normalises `/foo/../bar` to
+    /// `/bar`. The literal string the operator typed must round-trip into the
+    /// `Signature-Agent` header, so we reject `.` / `..` segments outright.
+    #[test]
+    fn test_validate_agent_directory_rejects_path_traversal() {
+        assert!(Config::validate_agent_directory("https://agent.example.com/../etc").is_err());
+        assert!(Config::validate_agent_directory("https://agent.example.com/foo/../bar").is_err());
+        assert!(Config::validate_agent_directory("https://agent.example.com/./bar").is_err());
+        assert!(Config::validate_agent_directory("https://agent.example.com/a/./b/../c").is_err());
     }
 
     #[test]
