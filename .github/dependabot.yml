@@ -49,7 +49,7 @@ updates:
           - "ed25519-dalek"
           - "sha2"
           - "jsonwebtoken"
-          - "josekit"
+          - "aws-lc-rs"
           - "zeroize"
           - "secrecy"
         update-types:
