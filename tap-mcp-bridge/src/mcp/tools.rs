@@ -399,17 +399,47 @@ pub(crate) fn validate_consumer_id(consumer_id: &str) -> Result<()> {
 }
 
 /// Parses and validates merchant URL.
+///
+/// Production policy rejects any URL that is not `https://` and any URL whose
+/// host is `localhost` or `127.0.0.1`. For local end-to-end testing against
+/// loopback-bound mocks (e.g. `wiremock`), set `TAP_ALLOW_LOOPBACK=1` in the
+/// process environment: the function will then accept `http://localhost`,
+/// `http://127.0.0.1`, and their `https` counterparts. The override is
+/// scoped to loopback hosts — non-loopback `http://` URLs are still rejected.
+///
+/// `TAP_ALLOW_LOOPBACK` is a developer escape hatch and must never be set in
+/// production: it disables HTTPS enforcement on the loopback interface and
+/// exposes signed TAP requests over plaintext.
 pub(crate) fn parse_merchant_url(url_str: &str) -> Result<url::Url> {
+    parse_merchant_url_with_policy(url_str, loopback_allowed_via_env())
+}
+
+/// Returns `true` when `TAP_ALLOW_LOOPBACK` is set to `1`.
+fn loopback_allowed_via_env() -> bool {
+    std::env::var("TAP_ALLOW_LOOPBACK").is_ok_and(|v| v == "1")
+}
+
+/// Pure policy helper used by [`parse_merchant_url`].
+///
+/// Splitting the env-var read from the URL validation lets unit tests
+/// exercise both branches without mutating process state.
+fn parse_merchant_url_with_policy(url_str: &str, allow_loopback: bool) -> Result<url::Url> {
     let url = url::Url::parse(url_str)
         .map_err(|e| BridgeError::InvalidMerchantUrl(format!("parse error: {e}")))?;
 
-    if url.scheme() != "https" {
+    let is_loopback_host =
+        matches!(url.host_str(), Some(h) if h == "localhost" || h == "127.0.0.1");
+
+    let scheme_ok = match url.scheme() {
+        "https" => true,
+        "http" => allow_loopback && is_loopback_host,
+        _ => false,
+    };
+    if !scheme_ok {
         return Err(BridgeError::InvalidMerchantUrl("URL must use HTTPS".into()));
     }
 
-    if let Some(host) = url.host_str()
-        && (host == "localhost" || host == "127.0.0.1" || host.starts_with("localhost:"))
-    {
+    if is_loopback_host && !allow_loopback {
         return Err(BridgeError::InvalidMerchantUrl("localhost URLs not allowed".into()));
     }
 
@@ -496,6 +526,50 @@ mod tests {
     fn test_parse_merchant_url_ws_rejected() {
         let url = parse_merchant_url("ws://merchant.com");
         assert!(url.is_err());
+    }
+
+    #[test]
+    fn test_parse_merchant_url_with_policy_default_rejects_http_loopback() {
+        let url = parse_merchant_url_with_policy("http://127.0.0.1:1234", false);
+        assert!(matches!(url, Err(BridgeError::InvalidMerchantUrl(_))));
+    }
+
+    #[test]
+    fn test_parse_merchant_url_with_policy_default_rejects_https_loopback() {
+        let url = parse_merchant_url_with_policy("https://localhost:1234", false);
+        assert!(matches!(url, Err(BridgeError::InvalidMerchantUrl(_))));
+    }
+
+    #[test]
+    fn test_parse_merchant_url_with_policy_loopback_accepts_http_127001() {
+        let url = parse_merchant_url_with_policy("http://127.0.0.1:8080/api", true);
+        assert!(url.is_ok(), "expected http://127.0.0.1 to be accepted: {url:?}");
+    }
+
+    #[test]
+    fn test_parse_merchant_url_with_policy_loopback_accepts_http_localhost() {
+        let url = parse_merchant_url_with_policy("http://localhost:3000", true);
+        assert!(url.is_ok(), "expected http://localhost to be accepted: {url:?}");
+    }
+
+    #[test]
+    fn test_parse_merchant_url_with_policy_loopback_accepts_https_loopback() {
+        let url = parse_merchant_url_with_policy("https://127.0.0.1:1234", true);
+        assert!(url.is_ok(), "expected https://127.0.0.1 to be accepted: {url:?}");
+    }
+
+    #[test]
+    fn test_parse_merchant_url_with_policy_loopback_still_rejects_http_remote() {
+        // The override is scoped to loopback hosts — plaintext to a remote host
+        // remains rejected even with allow_loopback=true.
+        let url = parse_merchant_url_with_policy("http://merchant.com", true);
+        assert!(matches!(url, Err(BridgeError::InvalidMerchantUrl(_))));
+    }
+
+    #[test]
+    fn test_parse_merchant_url_with_policy_loopback_still_rejects_ws() {
+        let url = parse_merchant_url_with_policy("ws://127.0.0.1:1234", true);
+        assert!(matches!(url, Err(BridgeError::InvalidMerchantUrl(_))));
     }
 
     #[test]
