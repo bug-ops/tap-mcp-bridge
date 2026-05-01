@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `tap-mcp-server` exited immediately after responding to `initialize`, dropping every subsequent request. Under rmcp 1.5, `Service::serve(transport)` resolves at initialization and returns a `RunningService` whose background task drives the request loop; the server now awaits `RunningService::waiting()` so the connection lives for its full lifetime (#118)
+
 ## [0.3.0] - 2026-05-01
 
 ### Added
