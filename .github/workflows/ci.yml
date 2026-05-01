@@ -233,9 +233,11 @@ jobs:
         run: sccache --show-stats
 
   # Run the prebuilt archive on every supported OS — no Cargo cache required.
+  # Gated on every lint/check job so a clippy/deny/msrv failure stops tests
+  # before they burn a matrix worth of runner minutes.
   test:
     name: Test (${{ matrix.os }})
-    needs: [build-tests]
+    needs: [check, security, msrv, feature-testing, dependencies, build-tests]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -332,7 +334,7 @@ jobs:
   # Trivy. SARIF output is uploaded to the GitHub Security tab.
   docker-build-and-scan:
     name: Docker Build and Security Scan
-    needs: [build-tests]
+    needs: [check, security, msrv, feature-testing, dependencies, build-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
