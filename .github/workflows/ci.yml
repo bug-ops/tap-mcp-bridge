@@ -178,6 +178,21 @@ jobs:
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
 
+      # mold is much faster than ld at the final link step; this saves ~5-10s
+      # per binary on the matrix builds. Linux only (mold doesn't support
+      # macOS/Windows).
+      - name: Install mold linker
+        if: runner.os == 'Linux'
+        uses: rui314/setup-mold@v1
+
+      # josekit links against system OpenSSL on non-Windows targets (see
+      # tap-mcp-bridge/Cargo.toml). ubuntu-latest already has libssl-dev;
+      # macos-latest needs OPENSSL_DIR pointing at the brew install so
+      # openssl-sys skips its 50s vendored build.
+      - name: Configure system OpenSSL on macOS
+        if: runner.os == 'macOS'
+        run: echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+
       # cache-targets: false because sccache already caches build artifacts —
       # leaving target/ out of the action prevents the two caches from clashing.
       - name: Cache Cargo (registry only)
@@ -292,6 +307,9 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: llvm-tools-preview
+
+      - name: Install mold linker
+        uses: rui314/setup-mold@v1
 
       - name: Cache Cargo (registry only)
         uses: Swatinem/rust-cache@v2

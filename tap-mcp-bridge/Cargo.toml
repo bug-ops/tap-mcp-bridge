@@ -25,7 +25,7 @@ base64.workspace = true
 chrono = { workspace = true, features = ["serde"] }
 ed25519-dalek.workspace = true
 hex.workspace = true
-josekit = { workspace = true, features = ["vendored"] }
+josekit = { workspace = true }
 jsonwebtoken = { workspace = true, features = ["aws_lc_rs"] }
 lru.workspace = true
 reqwest = { workspace = true, features = ["http2", "json", "rustls"] }
@@ -57,6 +57,12 @@ harness = false
 
 [features]
 default = []
+
+# Vendored OpenSSL is only needed on Windows where the runner does not ship
+# system libssl. Linux/macOS GHA runners have OpenSSL available via apt /
+# brew, so we skip the ~50s openssl-src compile there.
+[target.'cfg(windows)'.dependencies]
+josekit = { workspace = true, features = ["vendored"] }
 
 [lints]
 workspace = true
