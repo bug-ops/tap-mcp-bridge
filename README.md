@@ -3,6 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/tap-mcp-bridge)](https://crates.io/crates/tap-mcp-bridge)
 [![docs.rs](https://img.shields.io/docsrs/tap-mcp-bridge)](https://docs.rs/tap-mcp-bridge)
 [![CI](https://img.shields.io/github/actions/workflow/status/bug-ops/tap-mcp-bridge/ci.yml?branch=master)](https://github.com/bug-ops/tap-mcp-bridge/actions)
+[![codecov](https://codecov.io/gh/bug-ops/tap-mcp-bridge/graph/badge.svg?token=WFAE1K5ZS7)](https://codecov.io/gh/bug-ops/tap-mcp-bridge)
 [![License](https://img.shields.io/crates/l/tap-mcp-bridge)](LICENSE)
 
 Rust library and MCP server for Visa's Trusted Agent Protocol (TAP), enabling AI agents to securely authenticate with merchants and execute payment transactions.
