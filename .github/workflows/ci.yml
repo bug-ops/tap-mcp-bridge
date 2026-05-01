@@ -94,7 +94,7 @@ jobs:
 
   # MSRV check (matches workspace.package.rust-version)
   msrv:
-    name: Check MSRV (${{ env.RUST_VERSION }})
+    name: Check MSRV
     needs: [check]
     runs-on: ubuntu-latest
     timeout-minutes: 15
