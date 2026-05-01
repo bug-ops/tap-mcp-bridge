@@ -798,15 +798,28 @@ mod tests {
     /// to prevent TAP-signed credentials from leaking to a redirect target.
     #[tokio::test]
     async fn test_http_clients_do_not_follow_redirects() {
-        use tokio::{io::AsyncWriteExt, net::TcpListener};
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
 
         async fn assert_no_redirect(client: &Client) {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap();
             let server = tokio::spawn(async move {
                 let (mut socket, _) = listener.accept().await.unwrap();
-                // Loopback kernel buffers absorb the small request without an
-                // explicit read on this side; reply immediately with the redirect.
+                // Drain the request headers before replying. Windows aborts the
+                // socket with WSAECONNABORTED on shutdown if the receive buffer
+                // still holds unread bytes, which fails the client-side read.
+                let mut request = Vec::with_capacity(512);
+                let mut chunk = [0u8; 256];
+                while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                    let n = socket.read(&mut chunk).await.unwrap();
+                    if n == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&chunk[..n]);
+                }
                 let response = b"HTTP/1.1 307 Temporary Redirect\r\n\
                                  Location: https://attacker.example/admin/exfil\r\n\
                                  Content-Length: 0\r\n\
