@@ -49,7 +49,18 @@ use rmcp::{
 };
 use serde::Deserialize;
 use tap_mcp_bridge::{
-    mcp::{BrowseParams, CheckoutParams, browse_merchant, checkout_with_tap},
+    mcp::{
+        BrowseParams, CheckoutParams, browse_merchant,
+        cart::{
+            AddToCartParams, GetCartParams, RemoveFromCartParams, UpdateCartItemParams,
+            add_to_cart, get_cart, remove_from_cart, update_cart_item,
+        },
+        checkout_with_tap,
+        models::Address,
+        orders::{CreateOrderParams, GetOrderParams, create_order, get_order},
+        payment::{PaymentMethodParams, ProcessPaymentParams, process_payment},
+        products::{GetProductParams, GetProductsParams, get_product, get_products},
+    },
     tap::TapSigner,
 };
 use tracing::{error, info, instrument};
@@ -217,6 +228,327 @@ struct BrowseRequest {
     platform: String,
 }
 
+/// Get-products request parameters wrapper for MCP deserialization
+#[derive(Debug, Deserialize, JsonSchema)]
+struct GetProductsRequest {
+    /// Merchant URL
+    merchant_url: String,
+    /// Consumer identifier
+    consumer_id: String,
+    /// ISO 3166-1 alpha-2 country code
+    country_code: String,
+    /// Postal code
+    zip: String,
+    /// IP address
+    ip_address: String,
+    /// User agent
+    user_agent: String,
+    /// Platform
+    platform: String,
+    /// Product category filter
+    category: Option<String>,
+    /// Search query
+    search: Option<String>,
+    /// Page number (default 1)
+    page: Option<u32>,
+    /// Items per page (default 20)
+    per_page: Option<u32>,
+}
+
+/// Get-product request parameters wrapper for MCP deserialization
+#[derive(Debug, Deserialize, JsonSchema)]
+struct GetProductRequest {
+    /// Merchant URL
+    merchant_url: String,
+    /// Consumer identifier
+    consumer_id: String,
+    /// Product ID
+    product_id: String,
+    /// ISO 3166-1 alpha-2 country code
+    country_code: String,
+    /// Postal code
+    zip: String,
+    /// IP address
+    ip_address: String,
+    /// User agent
+    user_agent: String,
+    /// Platform
+    platform: String,
+}
+
+/// Add-to-cart request parameters wrapper for MCP deserialization
+#[derive(Debug, Deserialize, JsonSchema)]
+struct AddToCartRequest {
+    /// Merchant URL
+    merchant_url: String,
+    /// Consumer identifier
+    consumer_id: String,
+    /// Cart ID (omit to create a new cart)
+    cart_id: Option<String>,
+    /// Product ID to add
+    product_id: String,
+    /// Product variant ID
+    variant_id: Option<String>,
+    /// Quantity to add
+    quantity: u32,
+    /// ISO 3166-1 alpha-2 country code
+    country_code: String,
+    /// Postal code
+    zip: String,
+    /// IP address
+    ip_address: String,
+    /// User agent
+    user_agent: String,
+    /// Platform
+    platform: String,
+}
+
+/// Get-cart request parameters wrapper for MCP deserialization
+#[derive(Debug, Deserialize, JsonSchema)]
+struct GetCartRequest {
+    /// Merchant URL
+    merchant_url: String,
+    /// Consumer identifier
+    consumer_id: String,
+    /// Cart ID
+    cart_id: String,
+    /// ISO 3166-1 alpha-2 country code
+    country_code: String,
+    /// Postal code
+    zip: String,
+    /// IP address
+    ip_address: String,
+    /// User agent
+    user_agent: String,
+    /// Platform
+    platform: String,
+}
+
+/// Update-cart-item request parameters wrapper for MCP deserialization
+#[derive(Debug, Deserialize, JsonSchema)]
+struct UpdateCartItemRequest {
+    /// Merchant URL
+    merchant_url: String,
+    /// Consumer identifier
+    consumer_id: String,
+    /// Cart ID
+    cart_id: String,
+    /// Cart item ID
+    item_id: String,
+    /// New quantity
+    quantity: u32,
+    /// ISO 3166-1 alpha-2 country code
+    country_code: String,
+    /// Postal code
+    zip: String,
+    /// IP address
+    ip_address: String,
+    /// User agent
+    user_agent: String,
+    /// Platform
+    platform: String,
+}
+
+/// Remove-from-cart request parameters wrapper for MCP deserialization
+#[derive(Debug, Deserialize, JsonSchema)]
+struct RemoveFromCartRequest {
+    /// Merchant URL
+    merchant_url: String,
+    /// Consumer identifier
+    consumer_id: String,
+    /// Cart ID
+    cart_id: String,
+    /// Cart item ID to remove
+    item_id: String,
+    /// ISO 3166-1 alpha-2 country code
+    country_code: String,
+    /// Postal code
+    zip: String,
+    /// IP address
+    ip_address: String,
+    /// User agent
+    user_agent: String,
+    /// Platform
+    platform: String,
+}
+
+/// Address fields exposed to MCP clients (mirrors `tap_mcp_bridge::mcp::models::Address`).
+#[derive(Debug, Deserialize, JsonSchema)]
+struct AddressRequest {
+    /// Recipient name
+    name: String,
+    /// Street address
+    street: String,
+    /// City
+    city: String,
+    /// State or province
+    state: String,
+    /// Postal code
+    postal_code: String,
+    /// ISO 3166-1 alpha-2 country code
+    country: String,
+    /// Phone number
+    phone: Option<String>,
+}
+
+impl From<AddressRequest> for Address {
+    fn from(a: AddressRequest) -> Self {
+        Self {
+            name: a.name,
+            street: a.street,
+            city: a.city,
+            state: a.state,
+            postal_code: a.postal_code,
+            country: a.country,
+            phone: a.phone,
+        }
+    }
+}
+
+/// Create-order request parameters wrapper for MCP deserialization
+#[derive(Debug, Deserialize, JsonSchema)]
+struct CreateOrderRequest {
+    /// Merchant URL
+    merchant_url: String,
+    /// Consumer identifier
+    consumer_id: String,
+    /// Cart ID
+    cart_id: String,
+    /// Shipping address
+    shipping_address: AddressRequest,
+    /// Billing address (omit to reuse shipping address)
+    billing_address: Option<AddressRequest>,
+    /// Delivery option (e.g. `standard`, `express`)
+    delivery_option: Option<String>,
+    /// Promotional code
+    promo_code: Option<String>,
+    /// ISO 3166-1 alpha-2 country code
+    country_code: String,
+    /// Postal code
+    zip: String,
+    /// IP address
+    ip_address: String,
+    /// User agent
+    user_agent: String,
+    /// Platform
+    platform: String,
+}
+
+/// Get-order request parameters wrapper for MCP deserialization
+#[derive(Debug, Deserialize, JsonSchema)]
+struct GetOrderRequest {
+    /// Merchant URL
+    merchant_url: String,
+    /// Consumer identifier
+    consumer_id: String,
+    /// Order ID
+    order_id: String,
+    /// ISO 3166-1 alpha-2 country code
+    country_code: String,
+    /// Postal code
+    zip: String,
+    /// IP address
+    ip_address: String,
+    /// User agent
+    user_agent: String,
+    /// Platform
+    platform: String,
+}
+
+/// Payment method request (mirrors `tap_mcp_bridge::mcp::payment::PaymentMethodParams`).
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum PaymentMethodRequest {
+    /// Credit or debit card
+    Card {
+        /// Card number
+        card_number: String,
+        /// Expiry month (01-12)
+        expiry_month: String,
+        /// Expiry year (2-digit or 4-digit)
+        expiry_year: String,
+        /// CVV/CVC
+        cvv: String,
+        /// Cardholder name
+        cardholder_name: String,
+    },
+    /// Bank account (ACH)
+    BankAccount {
+        /// Account number
+        account_number: String,
+        /// Routing number
+        routing_number: String,
+        /// Account type (checking or savings)
+        account_type: String,
+        /// Account holder name
+        account_holder_name: String,
+    },
+    /// Digital wallet
+    DigitalWallet {
+        /// Wallet type (`apple_pay`, `google_pay`, etc.)
+        wallet_type: String,
+        /// Encrypted wallet token
+        wallet_token: String,
+        /// Account holder name
+        account_holder_name: String,
+    },
+}
+
+impl From<PaymentMethodRequest> for PaymentMethodParams {
+    fn from(m: PaymentMethodRequest) -> Self {
+        match m {
+            PaymentMethodRequest::Card {
+                card_number,
+                expiry_month,
+                expiry_year,
+                cvv,
+                cardholder_name,
+            } => Self::Card { card_number, expiry_month, expiry_year, cvv, cardholder_name },
+            PaymentMethodRequest::BankAccount {
+                account_number,
+                routing_number,
+                account_type,
+                account_holder_name,
+            } => Self::BankAccount {
+                account_number,
+                routing_number,
+                account_type,
+                account_holder_name,
+            },
+            PaymentMethodRequest::DigitalWallet {
+                wallet_type,
+                wallet_token,
+                account_holder_name,
+            } => Self::DigitalWallet { wallet_type, wallet_token, account_holder_name },
+        }
+    }
+}
+
+/// Process-payment request parameters wrapper for MCP deserialization
+#[derive(Debug, Deserialize, JsonSchema)]
+struct ProcessPaymentRequest {
+    /// Merchant URL
+    merchant_url: String,
+    /// Consumer identifier
+    consumer_id: String,
+    /// Order ID
+    order_id: String,
+    /// Payment method (sensitive fields are encrypted into APC)
+    payment_method: PaymentMethodRequest,
+    /// Merchant RSA public key in PEM format (for APC encryption)
+    merchant_public_key_pem: String,
+    /// ISO 3166-1 alpha-2 country code
+    country_code: String,
+    /// Postal code
+    zip: String,
+    /// IP address
+    ip_address: String,
+    /// User agent
+    user_agent: String,
+    /// Platform
+    platform: String,
+}
+
 // `Parameters<()>` would make rmcp publish the input schema as `{"type":"null"}`,
 // but the dispatcher always feeds `{}` to the deserializer regardless of what the
 // client sent — so every standard MCP argument shape (`{}`, `null`, omitted) fails.
@@ -344,6 +676,303 @@ impl TapMcpServer {
         ))]))
     }
 
+    /// Retrieve product catalog from merchant
+    #[tool(description = "Get product catalog from merchant with TAP authentication")]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, consumer_id = %params.0.consumer_id))]
+    async fn get_products(
+        &self,
+        params: Parameters<GetProductsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "get_products", "processing get_products request");
+
+        let lib_params = GetProductsParams {
+            merchant_url: params.0.merchant_url,
+            consumer_id: params.0.consumer_id,
+            country_code: params.0.country_code,
+            zip: params.0.zip,
+            ip_address: params.0.ip_address,
+            user_agent: params.0.user_agent,
+            platform: params.0.platform,
+            category: params.0.category,
+            search: params.0.search,
+            page: params.0.page,
+            per_page: params.0.per_page,
+        };
+
+        let catalog = get_products(&self.signer, lib_params).await.map_err(|e| {
+            error!(error = %e, "get_products failed");
+            McpError::invalid_request(format!("get_products failed: {e}"), None)
+        })?;
+
+        let json = serde_json::to_string(&catalog).map_err(|e| {
+            McpError::internal_error(format!("catalog serialization failed: {e}"), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Retrieve a single product
+    #[tool(description = "Get a single product from merchant with TAP authentication")]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, product_id = %params.0.product_id))]
+    async fn get_product(
+        &self,
+        params: Parameters<GetProductRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "get_product", "processing get_product request");
+
+        let lib_params = GetProductParams {
+            merchant_url: params.0.merchant_url,
+            consumer_id: params.0.consumer_id,
+            product_id: params.0.product_id,
+            country_code: params.0.country_code,
+            zip: params.0.zip,
+            ip_address: params.0.ip_address,
+            user_agent: params.0.user_agent,
+            platform: params.0.platform,
+        };
+
+        let product = get_product(&self.signer, lib_params).await.map_err(|e| {
+            error!(error = %e, "get_product failed");
+            McpError::invalid_request(format!("get_product failed: {e}"), None)
+        })?;
+
+        let json = serde_json::to_string(&product).map_err(|e| {
+            McpError::internal_error(format!("product serialization failed: {e}"), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Add an item to a cart
+    #[tool(description = "Add an item to a shopping cart with TAP authentication")]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, product_id = %params.0.product_id))]
+    async fn add_to_cart(
+        &self,
+        params: Parameters<AddToCartRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "add_to_cart", "processing add_to_cart request");
+
+        let lib_params = AddToCartParams {
+            merchant_url: params.0.merchant_url,
+            consumer_id: params.0.consumer_id,
+            cart_id: params.0.cart_id,
+            product_id: params.0.product_id,
+            variant_id: params.0.variant_id,
+            quantity: params.0.quantity,
+            country_code: params.0.country_code,
+            zip: params.0.zip,
+            ip_address: params.0.ip_address,
+            user_agent: params.0.user_agent,
+            platform: params.0.platform,
+        };
+
+        let cart = add_to_cart(&self.signer, lib_params).await.map_err(|e| {
+            error!(error = %e, "add_to_cart failed");
+            McpError::invalid_request(format!("add_to_cart failed: {e}"), None)
+        })?;
+
+        let json = serde_json::to_string(&cart).map_err(|e| {
+            McpError::internal_error(format!("cart serialization failed: {e}"), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Get current cart state
+    #[tool(description = "Get the state of a shopping cart with TAP authentication")]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, cart_id = %params.0.cart_id))]
+    async fn get_cart(
+        &self,
+        params: Parameters<GetCartRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "get_cart", "processing get_cart request");
+
+        let lib_params = GetCartParams {
+            merchant_url: params.0.merchant_url,
+            consumer_id: params.0.consumer_id,
+            cart_id: params.0.cart_id,
+            country_code: params.0.country_code,
+            zip: params.0.zip,
+            ip_address: params.0.ip_address,
+            user_agent: params.0.user_agent,
+            platform: params.0.platform,
+        };
+
+        let cart = get_cart(&self.signer, lib_params).await.map_err(|e| {
+            error!(error = %e, "get_cart failed");
+            McpError::invalid_request(format!("get_cart failed: {e}"), None)
+        })?;
+
+        let json = serde_json::to_string(&cart).map_err(|e| {
+            McpError::internal_error(format!("cart serialization failed: {e}"), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Update the quantity of a cart item
+    #[tool(description = "Update the quantity of a cart item with TAP authentication")]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, cart_id = %params.0.cart_id, item_id = %params.0.item_id))]
+    async fn update_cart_item(
+        &self,
+        params: Parameters<UpdateCartItemRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "update_cart_item", "processing update_cart_item request");
+
+        let lib_params = UpdateCartItemParams {
+            merchant_url: params.0.merchant_url,
+            consumer_id: params.0.consumer_id,
+            cart_id: params.0.cart_id,
+            item_id: params.0.item_id,
+            quantity: params.0.quantity,
+            country_code: params.0.country_code,
+            zip: params.0.zip,
+            ip_address: params.0.ip_address,
+            user_agent: params.0.user_agent,
+            platform: params.0.platform,
+        };
+
+        let cart = update_cart_item(&self.signer, lib_params).await.map_err(|e| {
+            error!(error = %e, "update_cart_item failed");
+            McpError::invalid_request(format!("update_cart_item failed: {e}"), None)
+        })?;
+
+        let json = serde_json::to_string(&cart).map_err(|e| {
+            McpError::internal_error(format!("cart serialization failed: {e}"), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Remove an item from a cart
+    #[tool(description = "Remove an item from a cart with TAP authentication")]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, cart_id = %params.0.cart_id, item_id = %params.0.item_id))]
+    async fn remove_from_cart(
+        &self,
+        params: Parameters<RemoveFromCartRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "remove_from_cart", "processing remove_from_cart request");
+
+        let lib_params = RemoveFromCartParams {
+            merchant_url: params.0.merchant_url,
+            consumer_id: params.0.consumer_id,
+            cart_id: params.0.cart_id,
+            item_id: params.0.item_id,
+            country_code: params.0.country_code,
+            zip: params.0.zip,
+            ip_address: params.0.ip_address,
+            user_agent: params.0.user_agent,
+            platform: params.0.platform,
+        };
+
+        let cart = remove_from_cart(&self.signer, lib_params).await.map_err(|e| {
+            error!(error = %e, "remove_from_cart failed");
+            McpError::invalid_request(format!("remove_from_cart failed: {e}"), None)
+        })?;
+
+        let json = serde_json::to_string(&cart).map_err(|e| {
+            McpError::internal_error(format!("cart serialization failed: {e}"), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Create an order from a cart
+    #[tool(description = "Create an order from a shopping cart with TAP authentication")]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, cart_id = %params.0.cart_id))]
+    async fn create_order(
+        &self,
+        params: Parameters<CreateOrderRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "create_order", "processing create_order request");
+
+        let lib_params = CreateOrderParams {
+            merchant_url: params.0.merchant_url,
+            consumer_id: params.0.consumer_id,
+            cart_id: params.0.cart_id,
+            shipping_address: params.0.shipping_address.into(),
+            billing_address: params.0.billing_address.map(Into::into),
+            delivery_option: params.0.delivery_option,
+            promo_code: params.0.promo_code,
+            country_code: params.0.country_code,
+            zip: params.0.zip,
+            ip_address: params.0.ip_address,
+            user_agent: params.0.user_agent,
+            platform: params.0.platform,
+        };
+
+        let order = create_order(&self.signer, lib_params).await.map_err(|e| {
+            error!(error = %e, "create_order failed");
+            McpError::invalid_request(format!("create_order failed: {e}"), None)
+        })?;
+
+        let json = serde_json::to_string(&order).map_err(|e| {
+            McpError::internal_error(format!("order serialization failed: {e}"), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Retrieve an order
+    #[tool(description = "Get the details of an order with TAP authentication")]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, order_id = %params.0.order_id))]
+    async fn get_order(
+        &self,
+        params: Parameters<GetOrderRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "get_order", "processing get_order request");
+
+        let lib_params = GetOrderParams {
+            merchant_url: params.0.merchant_url,
+            consumer_id: params.0.consumer_id,
+            order_id: params.0.order_id,
+            country_code: params.0.country_code,
+            zip: params.0.zip,
+            ip_address: params.0.ip_address,
+            user_agent: params.0.user_agent,
+            platform: params.0.platform,
+        };
+
+        let order = get_order(&self.signer, lib_params).await.map_err(|e| {
+            error!(error = %e, "get_order failed");
+            McpError::invalid_request(format!("get_order failed: {e}"), None)
+        })?;
+
+        let json = serde_json::to_string(&order).map_err(|e| {
+            McpError::internal_error(format!("order serialization failed: {e}"), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
+    /// Process a payment for an order (sensitive fields encrypted into APC)
+    #[tool(
+        description = "Process a payment for an order with TAP authentication; sensitive fields \
+                       are encrypted into APC using the merchant's RSA public key"
+    )]
+    #[instrument(skip(self, params), fields(merchant_url = %params.0.merchant_url, order_id = %params.0.order_id))]
+    async fn process_payment(
+        &self,
+        params: Parameters<ProcessPaymentRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        info!(tool = "process_payment", "processing process_payment request");
+
+        let lib_params = ProcessPaymentParams {
+            merchant_url: params.0.merchant_url,
+            consumer_id: params.0.consumer_id,
+            order_id: params.0.order_id,
+            payment_method: params.0.payment_method.into(),
+            merchant_public_key_pem: params.0.merchant_public_key_pem,
+            country_code: params.0.country_code,
+            zip: params.0.zip,
+            ip_address: params.0.ip_address,
+            user_agent: params.0.user_agent,
+            platform: params.0.platform,
+        };
+
+        let result = process_payment(&self.signer, lib_params).await.map_err(|e| {
+            error!(error = %e, "process_payment failed");
+            McpError::invalid_request(format!("process_payment failed: {e}"), None)
+        })?;
+
+        let json = serde_json::to_string(&result).map_err(|e| {
+            McpError::internal_error(format!("payment result serialization failed: {e}"), None)
+        })?;
+        Ok(CallToolResult::success(vec![Content::text(json)]))
+    }
+
     /// Verify agent identity and report health status
     #[tool(description = "Verify agent identity and check server health status")]
     #[instrument(skip(self, _params), fields(agent_id = %self.agent_id))]
@@ -464,10 +1093,9 @@ async fn main() -> Result<()> {
     // Create server with tools
     let server = TapMcpServer::new(signer, &config.agent_id);
 
-    info!(
-        "MCP server configured with tools: checkout_with_tap, browse_merchant, \
-         verify_agent_identity"
-    );
+    let tool_names: Vec<String> =
+        server.tool_router.list_all().into_iter().map(|t| t.name.into_owned()).collect();
+    info!(tools = ?tool_names, count = tool_names.len(), "MCP server configured");
     info!("MCP server started, listening on stdio");
     info!("Press Ctrl+C to shutdown");
 
@@ -586,6 +1214,35 @@ mod tests {
         let verify = tools.iter().find(|t| t.name == "verify_agent_identity").expect("tool listed");
         let schema = serde_json::to_value(&verify.input_schema).unwrap();
         assert_eq!(schema.get("type").and_then(|v| v.as_str()), Some("object"));
+    }
+
+    #[test]
+    fn test_tool_router_lists_all_expected_tools() {
+        // Regression for #121: server must register every public e-commerce tool
+        // exposed by the library, not just the original three.
+        let signing_key = SigningKey::from_bytes(&[1u8; 32]);
+        let signer = TapSigner::new(signing_key, "test-agent", "https://agent.example.com");
+        let server = TapMcpServer::new(signer, "test-agent");
+
+        let mut names: Vec<String> =
+            server.tool_router.list_all().into_iter().map(|t| t.name.into_owned()).collect();
+        names.sort();
+
+        let expected = [
+            "add_to_cart",
+            "browse_merchant",
+            "checkout_with_tap",
+            "create_order",
+            "get_cart",
+            "get_order",
+            "get_product",
+            "get_products",
+            "process_payment",
+            "remove_from_cart",
+            "update_cart_item",
+            "verify_agent_identity",
+        ];
+        assert_eq!(names, expected);
     }
 
     #[test]
