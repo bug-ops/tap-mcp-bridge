@@ -24,6 +24,28 @@ use crate::{
 /// This can be adjusted for testing with slower networks or merchants.
 const REQUEST_TIMEOUT_SECS: u64 = 30;
 
+/// Shared transport-agnostic builder for the TAP HTTP client.
+///
+/// Returns a [`reqwest::ClientBuilder`] configured with the timeout, pool, and
+/// — crucially — redirect policy used by every TAP request issued from this
+/// module. The HTTP-version selection (e.g. `http2_prior_knowledge`) is added
+/// by the caller so the regression test can exercise the same builder over
+/// HTTP/1.1.
+///
+/// Redirect-following is disabled because `reqwest`'s default `Policy::limited(10)`
+/// would forward TAP-specific headers (`Signature`, `Signature-Input`,
+/// `Signature-Agent`, `Content-Digest`) and 307/308 request bodies to the
+/// redirect target. RFC 9421 §1 binds a signature to a specific request — a
+/// redirect is a different request and the agent has not authorized it. A
+/// merchant returning 30x therefore surfaces as a [`BridgeError::MerchantError`]
+/// rather than being followed silently.
+fn tap_http_client_builder() -> reqwest::ClientBuilder {
+    Client::builder()
+        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        .pool_max_idle_per_host(100)
+        .redirect(reqwest::redirect::Policy::none())
+}
+
 /// Shared HTTP client for all TAP requests.
 ///
 /// This static client is initialized once and reused across all requests,
@@ -33,10 +55,9 @@ const REQUEST_TIMEOUT_SECS: u64 = 30;
 /// - 30-second timeout for all requests (see [`REQUEST_TIMEOUT_SECS`])
 /// - Connection pooling (100 connections per host)
 /// - HTTP/2 support with connection reuse
+/// - Redirects: disabled (see [`tap_http_client_builder`])
 static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
-    Client::builder()
-        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
-        .pool_max_idle_per_host(100)
+    tap_http_client_builder()
         .http2_prior_knowledge()
         .build()
         .expect("failed to create HTTP client")
@@ -479,6 +500,60 @@ fn parse_merchant_url_with_policy(url_str: &str, allow_loopback: bool) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression test for issue #146 — the shared `HTTP_CLIENT` static used by
+    /// `checkout_with_tap` and `browse_merchant` must not auto-follow redirects.
+    /// Without `Policy::none()`, `reqwest` would forward TAP signature headers
+    /// (and 307/308 request bodies) to the redirect target, leaking signed
+    /// credentials and ACRO PII to whatever host the merchant points to.
+    ///
+    /// The test exercises [`tap_http_client_builder`] — the shared builder that
+    /// `HTTP_CLIENT` is constructed from — over HTTP/1.1 so we can use a raw
+    /// TCP listener as the merchant. The static itself layers
+    /// `http2_prior_knowledge` on top, which is orthogonal to the redirect
+    /// policy that is the subject of this test.
+    #[tokio::test]
+    async fn test_http_client_does_not_follow_redirects() {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            // Drain the request headers before replying. Windows aborts the
+            // socket with WSAECONNABORTED on shutdown if the receive buffer
+            // still holds unread bytes, which fails the client-side read.
+            let mut request = Vec::with_capacity(512);
+            let mut chunk = [0u8; 256];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = socket.read(&mut chunk).await.unwrap();
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&chunk[..n]);
+            }
+            let response = b"HTTP/1.1 307 Temporary Redirect\r\n\
+                             Location: https://attacker.example/admin/exfil\r\n\
+                             Content-Length: 0\r\n\
+                             Connection: close\r\n\r\n";
+            socket.write_all(response).await.unwrap();
+            socket.shutdown().await.unwrap();
+        });
+
+        let client = tap_http_client_builder().build().unwrap();
+        let url = format!("http://{addr}/checkout");
+        let response = client.get(&url).send().await.unwrap();
+
+        // With `Policy::none()`, the 307 surfaces as the response status; if
+        // redirects were auto-followed, reqwest would dial `attacker.example`
+        // and never produce a 307 status here.
+        assert_eq!(response.status().as_u16(), 307);
+        server.await.unwrap();
+    }
 
     #[test]
     fn test_parse_merchant_url_valid() {
