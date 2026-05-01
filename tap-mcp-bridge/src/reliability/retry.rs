@@ -259,7 +259,9 @@ pub fn is_retryable(error: &BridgeError) -> bool {
         | BridgeError::FieldMappingError(_)
         | BridgeError::TransformationError(_) => false,
         // Don't retry security errors
-        BridgeError::ReplayAttack | BridgeError::RequestTooOld(_) => false,
+        BridgeError::ReplayAttack
+        | BridgeError::ReplayCacheSaturated
+        | BridgeError::RequestTooOld(_) => false,
         // Don't retry rate limit errors (should implement backoff instead)
         BridgeError::RateLimitExceeded => false,
         // Don't retry circuit breaker open (should wait for recovery)

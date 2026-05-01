@@ -1,13 +1,12 @@
 //! TAP signature verification using RFC 9421 HTTP Message Signatures.
 
 use std::{
-    num::NonZeroUsize,
+    collections::HashMap,
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use ed25519_dalek::{Signature, VerifyingKey};
-use lru::LruCache;
 use signature::Verifier;
 use tracing::{debug, instrument, warn};
 
@@ -16,6 +15,68 @@ use crate::{
     tap::{CLOCK_SKEW_TOLERANCE_SECS, TAP_MAX_VALIDITY_WINDOW_SECS, signer::TapSigner},
 };
 
+/// Default replay-cache capacity when the caller passes `0`.
+const DEFAULT_NONCE_CACHE_CAPACITY: usize = 1000;
+
+/// Replay-protection nonce cache state.
+///
+/// Eviction is **TTL-driven**: a nonce is held until its signature's `expires`
+/// (plus [`CLOCK_SKEW_TOLERANCE_SECS`]) has passed, at which point the underlying
+/// signature would also fail timestamp validation in [`TapVerifier::verify_request`].
+///
+/// When the cache is at capacity and contains only still-valid entries, fresh
+/// requests are refused with [`BridgeError::ReplayCacheSaturated`] (fail-closed)
+/// rather than evicting an unexpired nonce — silently dropping a valid entry
+/// would create a replay-protection bypass.
+#[derive(Debug)]
+struct NonceCache {
+    /// Nonce → signature `expires` timestamp (seconds since UNIX epoch).
+    entries: HashMap<String, u64>,
+    /// Hard ceiling on `entries.len()`.
+    capacity: usize,
+}
+
+impl NonceCache {
+    fn new(capacity: usize) -> Self {
+        let capacity = if capacity == 0 {
+            DEFAULT_NONCE_CACHE_CAPACITY
+        } else {
+            capacity
+        };
+        Self { entries: HashMap::new(), capacity }
+    }
+
+    /// TTL-driven sweep: drop every nonce whose signature is no longer
+    /// acceptable to [`TapVerifier::verify_request`] (i.e. `expires + skew < now`).
+    fn sweep_expired(&mut self, now: u64) {
+        let cutoff = now.saturating_sub(CLOCK_SKEW_TOLERANCE_SECS);
+        self.entries.retain(|_, expires| *expires >= cutoff);
+    }
+
+    /// Records `nonce` as seen. Caller MUST have called [`Self::sweep_expired`]
+    /// for the same `now` first; this keeps the saturation check meaningful.
+    ///
+    /// Returns:
+    /// - `Err(ReplayAttack)` if `nonce` is already cached and still valid.
+    /// - `Err(ReplayCacheSaturated)` if the cache is full of unexpired entries.
+    /// - `Ok(())` once `nonce` has been inserted.
+    fn check_and_insert(&mut self, nonce: &str, expires: u64) -> Result<()> {
+        if self.entries.contains_key(nonce) {
+            return Err(BridgeError::ReplayAttack);
+        }
+        if self.entries.len() >= self.capacity {
+            warn!(
+                len = self.entries.len(),
+                capacity = self.capacity,
+                "Replay-protection cache saturated with unexpired nonces; rejecting fresh request"
+            );
+            return Err(BridgeError::ReplayCacheSaturated);
+        }
+        self.entries.insert(nonce.to_owned(), expires);
+        Ok(())
+    }
+}
+
 /// Verifies TAP signatures on HTTP requests.
 ///
 /// Implements RFC 9421 signature verification with TAP-specific requirements:
@@ -23,11 +84,20 @@ use crate::{
 /// - Replay protection using nonces (8-minute window)
 /// - Expiration validation
 /// - Required component verification
+///
+/// # Replay-Protection Sizing
+///
+/// The verifier retains every accepted nonce until its signature's `expires`
+/// timestamp has passed. Capacity should therefore be at least
+/// `peak_requests_per_second × (TAP_MAX_VALIDITY_WINDOW_SECS + CLOCK_SKEW_TOLERANCE_SECS)`
+/// — i.e. `peak_RPS × 540` for the 8-minute TAP window plus the 60-second skew
+/// tolerance. Under-sizing causes legitimate fresh requests to fail with
+/// [`BridgeError::ReplayCacheSaturated`] rather than silently weakening the
+/// replay-protection window.
 #[derive(Debug, Clone)]
 pub struct TapVerifier {
-    /// Cache of recently seen nonces to prevent replay attacks.
-    /// Wrapped in Mutex for thread safety.
-    nonce_cache: Arc<Mutex<LruCache<String, u64>>>,
+    /// Replay-protection cache, wrapped in `Mutex` for thread safety.
+    nonce_cache: Arc<Mutex<NonceCache>>,
 }
 
 impl TapVerifier {
@@ -35,17 +105,13 @@ impl TapVerifier {
     ///
     /// # Arguments
     ///
-    /// * `capacity` - Maximum number of nonces to store for replay protection. Recommended: 10,000+
-    ///   for high-traffic services.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the default capacity (1000) is invalid (should never happen).
+    /// * `capacity` - Maximum number of unexpired nonces to store for replay protection. Size for
+    ///   `peak_RPS × 540` to comfortably cover the TAP 8-minute validity window plus clock-skew
+    ///   tolerance; recommended floor is 10,000 for general-purpose deployments. A value of `0` is
+    ///   replaced by an internal default of 1000.
     #[must_use]
     pub fn new(capacity: usize) -> Self {
-        let cap = NonZeroUsize::new(capacity)
-            .unwrap_or(NonZeroUsize::new(1000).expect("1000 is non-zero"));
-        Self { nonce_cache: Arc::new(Mutex::new(LruCache::new(cap))) }
+        Self { nonce_cache: Arc::new(Mutex::new(NonceCache::new(capacity))) }
     }
 
     /// Verifies an HTTP request signature.
@@ -138,26 +204,21 @@ impl TapVerifier {
             ));
         }
 
-        // 3. Check replay protection
+        // 3. Check replay protection (TTL-driven, fail-closed on saturation).
         {
             let mut cache = self.nonce_cache.lock().map_err(|_| {
                 BridgeError::CryptoError("Failed to acquire nonce cache lock".to_owned())
             })?;
 
-            // Check if nonce exists in cache
-            if let Some(&cached_expires) = cache.get(&nonce) {
-                // Only consider it a replay if the cached nonce hasn't expired yet
-                // (accounting for clock skew tolerance)
-                if cached_expires + CLOCK_SKEW_TOLERANCE_SECS >= now {
+            cache.sweep_expired(now);
+            match cache.check_and_insert(&nonce, expires) {
+                Ok(()) => {}
+                Err(BridgeError::ReplayAttack) => {
                     warn!(nonce, "Replay attack detected");
                     return Err(BridgeError::ReplayAttack);
                 }
-                // Nonce expired, will be replaced below
-                cache.pop(&nonce);
+                Err(e) => return Err(e),
             }
-
-            // Store nonce with its expiration time
-            cache.put(nonce.clone(), expires);
         };
 
         // 4. Reconstruct signature base
@@ -224,6 +285,10 @@ impl TapVerifier {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::panic,
+    reason = "test code uses panic for assertion on unexpected errors"
+)]
 mod tests {
     use ed25519_dalek::SigningKey;
 
@@ -297,5 +362,129 @@ mod tests {
         );
 
         assert!(matches!(result, Err(BridgeError::ReplayAttack)));
+    }
+
+    /// Regression for issue #153: under LRU eviction, capacity+1 fresh nonces
+    /// silently dropped the oldest still-valid entry, letting an attacker
+    /// replay it within the 8-minute validity window.
+    ///
+    /// The TTL-driven cache must instead either keep the original nonce (so
+    /// replay is detected) or fail-closed on the flooding request. Either
+    /// outcome closes the bypass; LRU eviction does neither.
+    #[test]
+    fn test_replay_cache_does_not_drop_unexpired_nonces_under_flood() {
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let verifying_key = signing_key.verifying_key();
+        let signer = TapSigner::new(signing_key, "agent-1", "https://agent.com");
+        let capacity: usize = 8;
+        let verifier = TapVerifier::new(capacity);
+
+        let verify = |sig: &crate::tap::signer::TapSignature| {
+            verifier.verify_request(
+                "POST",
+                "merchant.com",
+                "/checkout",
+                b"test",
+                &sig.signature,
+                &sig.signature_input,
+                &verifying_key,
+            )
+        };
+
+        // 1. Legitimate request, accepted.
+        let original = signer
+            .sign_request("POST", "merchant.com", "/checkout", b"test", InteractionType::Checkout)
+            .unwrap();
+        verify(&original).expect("legitimate request must verify");
+
+        // 2. Flood the verifier with `capacity` more distinct nonces. Some MAY be rejected with
+        //    ReplayCacheSaturated once the cache fills — that is the fail-closed outcome — but none
+        //    must dislodge `original`.
+        for _ in 0..capacity {
+            let flood_sig = signer
+                .sign_request(
+                    "POST",
+                    "merchant.com",
+                    "/checkout",
+                    b"test",
+                    InteractionType::Checkout,
+                )
+                .unwrap();
+            match verify(&flood_sig) {
+                Ok(()) | Err(BridgeError::ReplayCacheSaturated) => {}
+                Err(other) => panic!("unexpected verification error during flood: {other:?}"),
+            }
+        }
+
+        // 3. Replay the original nonce. It MUST be detected as a replay; the LRU bug returned Ok
+        //    here.
+        let replayed = verify(&original);
+        assert!(
+            matches!(replayed, Err(BridgeError::ReplayAttack)),
+            "post-flood replay must be rejected, got {replayed:?}"
+        );
+    }
+
+    /// When the cache is full of unexpired nonces, fresh requests must be
+    /// refused fail-closed rather than evicting a still-valid entry.
+    #[test]
+    fn test_replay_cache_fails_closed_when_saturated() {
+        let signing_key = SigningKey::from_bytes(&[9u8; 32]);
+        let verifying_key = signing_key.verifying_key();
+        let signer = TapSigner::new(signing_key, "agent-1", "https://agent.com");
+        let capacity: usize = 4;
+        let verifier = TapVerifier::new(capacity);
+
+        let verify = |sig: &crate::tap::signer::TapSignature| {
+            verifier.verify_request(
+                "POST",
+                "merchant.com",
+                "/checkout",
+                b"test",
+                &sig.signature,
+                &sig.signature_input,
+                &verifying_key,
+            )
+        };
+
+        for _ in 0..capacity {
+            let sig = signer
+                .sign_request(
+                    "POST",
+                    "merchant.com",
+                    "/checkout",
+                    b"test",
+                    InteractionType::Checkout,
+                )
+                .unwrap();
+            verify(&sig).expect("first `capacity` requests fit in the cache");
+        }
+
+        let overflow = signer
+            .sign_request("POST", "merchant.com", "/checkout", b"test", InteractionType::Checkout)
+            .unwrap();
+        let result = verify(&overflow);
+        assert!(
+            matches!(result, Err(BridgeError::ReplayCacheSaturated)),
+            "saturated cache must reject fresh requests, got {result:?}"
+        );
+    }
+
+    /// Once an entry's signature would itself fail timestamp validation, the
+    /// TTL sweep is allowed to drop it and a re-use of that nonce becomes
+    /// indistinguishable from a fresh signature. The signature timestamp guard
+    /// catches the actual replay before this matters in practice.
+    #[test]
+    fn test_replay_cache_sweep_drops_expired_entries() {
+        let mut cache = NonceCache::new(2);
+        // Synthetic now=1000; entry expires at 100, well outside the
+        // CLOCK_SKEW_TOLERANCE_SECS window.
+        cache.entries.insert("stale".to_owned(), 100);
+        cache.entries.insert("fresh".to_owned(), 1500);
+
+        cache.sweep_expired(1000);
+
+        assert!(!cache.entries.contains_key("stale"), "expired nonce must be evicted");
+        assert!(cache.entries.contains_key("fresh"), "unexpired nonce must be retained");
     }
 }
