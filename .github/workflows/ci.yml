@@ -212,7 +212,7 @@ jobs:
           --archive-file nextest-archive.tar.zst
 
       - name: Upload test archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nextest-archive-${{ matrix.os }}
           path: nextest-archive.tar.zst
@@ -256,7 +256,7 @@ jobs:
         run: cargo build --bin tap-mcp-server --profile ci
 
       - name: Upload server binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tap-mcp-server-binary
           path: target/ci/tap-mcp-server
