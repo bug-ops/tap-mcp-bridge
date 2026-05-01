@@ -3,7 +3,7 @@
 //! This module provides secure payment processing with APC (Agentic Payment Container)
 //! encryption and TAP authentication.
 
-use std::sync::{Arc, Mutex};
+use std::{num::NonZeroUsize, sync::LazyLock};
 
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
@@ -17,7 +17,7 @@ use crate::{
         },
         models::PaymentResult,
     },
-    security::{RateLimitConfig, RateLimiter},
+    security::{KeyedRateLimiter, RateLimitConfig},
     tap::{
         InteractionType, TapSigner,
         acro::ContextualData,
@@ -273,45 +273,42 @@ pub async fn process_payment(
     Ok(payment_result)
 }
 
-/// Rate limiter for payment operations.
+/// Maximum number of distinct consumers tracked by the payment rate limiter.
 ///
-/// Global rate limiter shared across all payment processing operations
-/// to prevent abuse and ensure compliance with merchant policies.
-///
-/// Default configuration: 5 payments per minute per consumer
-static PAYMENT_RATE_LIMITER: Mutex<Option<Arc<RateLimiter>>> = Mutex::new(None);
+/// Once this many consumers are active, the least-recently-used consumer's
+/// bucket is evicted so memory remains bounded under high-cardinality input.
+const PAYMENT_RATE_LIMITER_CAPACITY: usize = 10_000;
 
-/// Gets or initializes the global payment rate limiter.
-fn get_payment_rate_limiter() -> Arc<RateLimiter> {
-    let mut limiter_opt = PAYMENT_RATE_LIMITER
-        .lock()
-        .expect("payment rate limiter mutex should not be poisoned");
-    if let Some(limiter) = limiter_opt.as_ref() {
-        Arc::clone(limiter)
-    } else {
-        // Default: 5 payments per minute = 0.083 per second
-        // Using burst_size of 3 to allow some flexibility
-        let config = RateLimitConfig {
-            requests_per_second: 1, // ~60/min with some margin
-            burst_size: 3,          // Allow burst of 3 payments
-        };
-        let limiter = Arc::new(RateLimiter::new(config));
-        *limiter_opt = Some(Arc::clone(&limiter));
-        limiter
-    }
-}
+/// Per-consumer rate limiter for payment operations.
+///
+/// Each `consumer_id` receives an independent token bucket; exhausting one
+/// consumer's bucket does not throttle any other consumer. The map is bounded
+/// by [`PAYMENT_RATE_LIMITER_CAPACITY`] with LRU eviction.
+///
+/// Default per-consumer configuration: 1 request/second sustained, burst of 3.
+static PAYMENT_RATE_LIMITER: LazyLock<KeyedRateLimiter> = LazyLock::new(|| {
+    let config = RateLimitConfig { requests_per_second: 1, burst_size: 3 };
+    let capacity = NonZeroUsize::new(PAYMENT_RATE_LIMITER_CAPACITY)
+        .expect("PAYMENT_RATE_LIMITER_CAPACITY is non-zero");
+    KeyedRateLimiter::new(config, capacity)
+});
 
-/// Processes payment with rate limiting applied.
+/// Processes payment with per-consumer rate limiting applied.
 ///
-/// This is a wrapper around [`process_payment`] that enforces rate limiting
-/// to prevent excessive payment attempts.
+/// This is a wrapper around [`process_payment`] that enforces a token bucket
+/// rate limit keyed on `params.consumer_id`. Each consumer has an independent
+/// bucket: throttling one consumer never affects another.
 ///
-/// Default rate limit: 5 attempts per minute per consumer (burst of 3).
+/// Default per-consumer rate limit: 1 request/second sustained with a burst
+/// of 3. The number of distinct consumers tracked simultaneously is bounded
+/// (LRU eviction); long-idle consumers are dropped from the registry and
+/// re-created on next use, which simply restores their bucket to full.
 ///
 /// # Errors
 ///
-/// Returns [`crate::error::BridgeError::RateLimitExceeded`] if rate limit is exceeded,
-/// or any error from the underlying [`process_payment`] function.
+/// Returns [`crate::error::BridgeError::RateLimitExceeded`] if the
+/// per-consumer rate limit is exceeded, or any error from the underlying
+/// [`process_payment`] function.
 ///
 /// # Examples
 ///
@@ -360,13 +357,10 @@ pub async fn process_payment_rate_limited(
     signer: &TapSigner,
     params: ProcessPaymentParams,
 ) -> Result<PaymentResult> {
-    // Acquire rate limit token
-    let limiter = get_payment_rate_limiter();
-    limiter.acquire().await?;
+    PAYMENT_RATE_LIMITER.acquire(&params.consumer_id).await?;
 
     info!("rate limit passed, processing payment");
 
-    // Process payment
     process_payment(signer, params).await
 }
 
@@ -709,5 +703,35 @@ mod tests {
             };
             assert_eq!(data.exp_year, year);
         }
+    }
+
+    /// Regression for #140: the payment rate limiter must be keyed per
+    /// `consumer_id`. Exhausting one consumer's bucket must not deny service
+    /// to a different consumer.
+    ///
+    /// Drives the same static the production `process_payment_rate_limited`
+    /// path uses, so a future regression to a process-global limiter would be
+    /// caught here. Each invocation uses unique `consumer_ids` so the test
+    /// does not collide with state left over by other tests in the same
+    /// process.
+    #[tokio::test]
+    async fn test_payment_rate_limiter_is_per_consumer() {
+        let alice = format!("rl-test-alice-{}", uuid::Uuid::new_v4());
+        let bob = format!("rl-test-bob-{}", uuid::Uuid::new_v4());
+
+        // Drain alice's burst (default burst_size = 3).
+        for _ in 0..3 {
+            assert!(PAYMENT_RATE_LIMITER.acquire(&alice).await.is_ok());
+        }
+        assert!(matches!(
+            PAYMENT_RATE_LIMITER.acquire(&alice).await,
+            Err(BridgeError::RateLimitExceeded)
+        ));
+
+        // Bob must not be throttled by alice's exhaustion.
+        assert!(
+            PAYMENT_RATE_LIMITER.acquire(&bob).await.is_ok(),
+            "bob's bucket must be independent of alice's"
+        );
     }
 }

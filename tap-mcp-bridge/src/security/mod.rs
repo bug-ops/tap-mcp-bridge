@@ -69,4 +69,4 @@ mod rate_limit;
 pub use audit::{
     AuditDetails, AuditEvent, AuditEventType, audit_log, redact_consumer_id, redact_sensitive,
 };
-pub use rate_limit::{RateLimitConfig, RateLimitedSigner, RateLimiter};
+pub use rate_limit::{KeyedRateLimiter, RateLimitConfig, RateLimitedSigner, RateLimiter};

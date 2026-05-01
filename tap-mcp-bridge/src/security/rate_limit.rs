@@ -57,13 +57,15 @@
 //! ```
 
 use std::{
+    num::NonZeroUsize,
     sync::{
-        Arc,
+        Arc, Mutex as StdMutex,
         atomic::{AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
 
+use lru::LruCache;
 use tokio::sync::Mutex;
 use tracing::{debug, instrument, warn};
 
@@ -291,6 +293,113 @@ impl RateLimiter {
                 "Tokens refilled"
             );
         }
+    }
+}
+
+/// Per-key token bucket rate limiter with bounded LRU eviction.
+///
+/// Maintains an independent [`RateLimiter`] for each distinct key (e.g. a
+/// `consumer_id`), so exhausting one key's bucket does not affect other keys.
+///
+/// The internal map is bounded by an LRU policy: when the configured capacity
+/// is reached, the least-recently-used limiter is evicted. This guarantees
+/// bounded memory usage even when callers submit many distinct keys.
+///
+/// Each per-key limiter uses the same [`RateLimitConfig`] supplied at
+/// construction time.
+///
+/// # Examples
+///
+/// ```rust
+/// use std::num::NonZeroUsize;
+///
+/// use tap_mcp_bridge::security::{KeyedRateLimiter, RateLimitConfig};
+///
+/// # async fn example() -> tap_mcp_bridge::error::Result<()> {
+/// let config = RateLimitConfig { requests_per_second: 1, burst_size: 2 };
+/// let capacity = NonZeroUsize::new(1024).expect("non-zero");
+/// let limiter = KeyedRateLimiter::new(config, capacity);
+///
+/// // Each key has its own bucket.
+/// limiter.acquire("alice").await?;
+/// limiter.acquire("bob").await?;
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug)]
+pub struct KeyedRateLimiter {
+    config: RateLimitConfig,
+    limiters: StdMutex<LruCache<String, Arc<RateLimiter>>>,
+}
+
+impl KeyedRateLimiter {
+    /// Creates a new keyed rate limiter.
+    ///
+    /// `config` is applied to every per-key bucket; `capacity` bounds the
+    /// number of distinct keys retained in the LRU map.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::num::NonZeroUsize;
+    ///
+    /// use tap_mcp_bridge::security::{KeyedRateLimiter, RateLimitConfig};
+    ///
+    /// let config = RateLimitConfig::default();
+    /// let capacity = NonZeroUsize::new(10_000).expect("non-zero");
+    /// let limiter = KeyedRateLimiter::new(config, capacity);
+    /// ```
+    #[must_use]
+    pub fn new(config: RateLimitConfig, capacity: NonZeroUsize) -> Self {
+        Self { config, limiters: StdMutex::new(LruCache::new(capacity)) }
+    }
+
+    /// Returns the per-key limiter, creating it on first access.
+    ///
+    /// Marks the key as most-recently-used so it is not evicted while in active
+    /// use. The lock is released before the caller awaits on the returned
+    /// limiter, so this method does not hold the mutex across `.await`.
+    fn limiter_for(&self, key: &str) -> Arc<RateLimiter> {
+        let mut cache =
+            self.limiters.lock().expect("keyed rate limiter mutex should not be poisoned");
+        if let Some(limiter) = cache.get(key) {
+            return Arc::clone(limiter);
+        }
+        let limiter = Arc::new(RateLimiter::new(self.config));
+        cache.put(key.to_owned(), Arc::clone(&limiter));
+        limiter
+    }
+
+    /// Attempts to acquire a token for `key`.
+    ///
+    /// Returns immediately with success if the per-key bucket has a token,
+    /// otherwise returns [`BridgeError::RateLimitExceeded`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BridgeError::RateLimitExceeded`] if the rate limit for `key`
+    /// is exceeded.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::num::NonZeroUsize;
+    ///
+    /// use tap_mcp_bridge::security::{KeyedRateLimiter, RateLimitConfig};
+    ///
+    /// # async fn example() -> tap_mcp_bridge::error::Result<()> {
+    /// let limiter = KeyedRateLimiter::new(
+    ///     RateLimitConfig::default(),
+    ///     NonZeroUsize::new(1024).expect("non-zero"),
+    /// );
+    /// limiter.acquire("user-123").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self), fields(key), level = "debug")]
+    pub async fn acquire(&self, key: &str) -> Result<()> {
+        let limiter = self.limiter_for(key);
+        limiter.acquire().await
     }
 }
 
@@ -759,5 +868,43 @@ mod tests {
         // But both should be valid signatures
         assert!(!sig1.signature.is_empty());
         assert!(!sig2.signature.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_keyed_rate_limiter_isolates_buckets_per_key() {
+        let config = RateLimitConfig { requests_per_second: 1, burst_size: 2 };
+        let capacity = NonZeroUsize::new(64).expect("non-zero");
+        let limiter = KeyedRateLimiter::new(config, capacity);
+
+        // Drain alice's bucket.
+        assert!(limiter.acquire("alice").await.is_ok());
+        assert!(limiter.acquire("alice").await.is_ok());
+        assert!(matches!(limiter.acquire("alice").await, Err(BridgeError::RateLimitExceeded)));
+
+        // Bob has an independent bucket; alice's exhaustion must not throttle him.
+        assert!(limiter.acquire("bob").await.is_ok());
+        assert!(limiter.acquire("bob").await.is_ok());
+        assert!(matches!(limiter.acquire("bob").await, Err(BridgeError::RateLimitExceeded)));
+
+        // A third distinct key is also untouched by alice and bob.
+        assert!(limiter.acquire("charlie").await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_keyed_rate_limiter_lru_eviction_resets_evicted_bucket() {
+        let config = RateLimitConfig { requests_per_second: 1, burst_size: 1 };
+        let capacity = NonZeroUsize::new(2).expect("non-zero");
+        let limiter = KeyedRateLimiter::new(config, capacity);
+
+        // Drain alice's only token; her entry is now in the LRU map.
+        assert!(limiter.acquire("alice").await.is_ok());
+        assert!(matches!(limiter.acquire("alice").await, Err(BridgeError::RateLimitExceeded)));
+
+        // Insert two more keys to push alice out of the LRU map.
+        assert!(limiter.acquire("bob").await.is_ok());
+        assert!(limiter.acquire("charlie").await.is_ok());
+
+        // Alice's bucket is recreated fresh (acceptable trade-off for bounded memory).
+        assert!(limiter.acquire("alice").await.is_ok());
     }
 }
