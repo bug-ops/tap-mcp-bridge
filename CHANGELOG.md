@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `tap-mcp-server` exited immediately after responding to `initialize`, dropping every subsequent request. Under rmcp 1.5, `Service::serve(transport)` resolves at initialization and returns a `RunningService` whose background task drives the request loop; the server now awaits `RunningService::waiting()` so the connection lives for its full lifetime (#118)
 - Merchant request URLs no longer contain a duplicated separator (`https://host//checkout`) when the configured `merchant_url` has no trailing slash. `Url::Display` always emits a trailing `/` for an origin with an empty path, and the previous `format!("{url}{path}")` concatenation produced the wrong wire path on every checkout/browse call. The wire path now matches the `@path` value used to build the RFC 9421 signature base, fixing verification against strict merchants. Introduces `compose_request_url` which preserves the base URL's path prefix and ensures exactly one slash between segments (#116)
+- `tap-mcp-server` advertised itself as `rmcp/1.5.0` in the `initialize` response because rmcp's default `Implementation::from_build_env` captures `env!("CARGO_*")` inside the rmcp crate. `ServerHandler::get_info` is now overridden on `TapMcpServer` to return `tap-mcp-server` and the workspace version, giving MCP clients the correct identity (#117)
 
 ## [0.3.0] - 2026-05-01
 
