@@ -237,7 +237,7 @@ pub async fn get_cart(signer: &TapSigner, params: GetCartParams) -> Result<CartS
 /// # Errors
 ///
 /// Returns error if signature generation, HTTP request, or response parsing fails.
-#[instrument(skip(signer, params), fields(merchant_url = %params.merchant_url, item_id = %params.item_id))]
+#[instrument(skip(signer, params), fields(merchant_url = %params.merchant_url, cart_id = %params.cart_id, item_id = %params.item_id))]
 pub async fn update_cart_item(
     signer: &TapSigner,
     params: UpdateCartItemParams,
@@ -256,10 +256,10 @@ pub async fn update_cart_item(
 
     let request_body = UpdateCartItemRequest { quantity: params.quantity };
 
-    let path = build_url_with_query(&format!("/cart/items/{}", params.item_id), &[(
-        "consumer_id",
-        &params.consumer_id,
-    )])?;
+    let path = build_url_with_query(&format!("/cart/items/{}", params.item_id), &[
+        ("cart_id", &params.cart_id),
+        ("consumer_id", &params.consumer_id),
+    ])?;
 
     let client = create_http_client()?;
     let response = execute_tap_request_with_acro(
@@ -287,7 +287,7 @@ pub async fn update_cart_item(
 /// # Errors
 ///
 /// Returns error if signature generation, HTTP request, or response parsing fails.
-#[instrument(skip(signer, params), fields(merchant_url = %params.merchant_url, item_id = %params.item_id))]
+#[instrument(skip(signer, params), fields(merchant_url = %params.merchant_url, cart_id = %params.cart_id, item_id = %params.item_id))]
 pub async fn remove_from_cart(
     signer: &TapSigner,
     params: RemoveFromCartParams,
@@ -304,10 +304,10 @@ pub async fn remove_from_cart(
         },
     };
 
-    let path = build_url_with_query(&format!("/cart/items/{}", params.item_id), &[(
-        "consumer_id",
-        &params.consumer_id,
-    )])?;
+    let path = build_url_with_query(&format!("/cart/items/{}", params.item_id), &[
+        ("cart_id", &params.cart_id),
+        ("consumer_id", &params.consumer_id),
+    ])?;
 
     let client = create_http_client()?;
     let response = execute_tap_request_with_acro(
