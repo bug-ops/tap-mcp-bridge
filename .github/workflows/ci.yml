@@ -221,8 +221,14 @@ jobs:
           path: nextest-archive.tar.zst
           retention-days: 1
 
-      # Reuse the same compilation pass for the docker job: nextest archive
-      # also leaves target/ci/tap-mcp-server on the runner.
+      # `cargo nextest archive --bins` compiles each bin as a test target into
+      # target/ci/deps and never produces target/ci/tap-mcp-server. Run a quick
+      # `cargo build` afterwards on ubuntu so the docker job gets the actual
+      # production binary; sccache makes this practically free.
+      - name: Build server binary for docker
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo build --bin tap-mcp-server --profile ci
+
       - name: Upload server binary
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
@@ -230,6 +236,7 @@ jobs:
           name: tap-mcp-server-binary
           path: target/ci/tap-mcp-server
           retention-days: 1
+          if-no-files-found: error
 
       - name: Print sccache stats
         if: always()
