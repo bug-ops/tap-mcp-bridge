@@ -39,7 +39,8 @@ use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
     handler::server::{tool::ToolRouter, wrapper::Parameters},
     model::{
-        CallToolRequestParams, CallToolResult, Content, ListToolsResult, PaginatedRequestParams,
+        CallToolRequestParams, CallToolResult, Content, Implementation, ListToolsResult,
+        PaginatedRequestParams, ServerInfo,
     },
     schemars,
     schemars::JsonSchema,
@@ -382,6 +383,17 @@ impl TapMcpServer {
 }
 
 impl ServerHandler for TapMcpServer {
+    fn get_info(&self) -> ServerInfo {
+        // Default `ServerInfo` reports `rmcp` / rmcp's own version, because
+        // `Implementation::from_build_env` captures `env!("CARGO_*")` inside
+        // the rmcp crate. Override with this binary's identity so MCP clients
+        // see `tap-mcp-server` instead of the framework name.
+        ServerInfo::default().with_server_info(Implementation::new(
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION"),
+        ))
+    }
+
     async fn list_tools(
         &self,
         _pagination: Option<PaginatedRequestParams>,
@@ -533,5 +545,17 @@ mod tests {
 
         let result = create_signer(&config);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_info_reports_binary_identity() {
+        let signing_key = SigningKey::from_bytes(&[1u8; 32]);
+        let signer = TapSigner::new(signing_key, "test-agent", "https://agent.example.com");
+        let server = TapMcpServer::new(signer, "test-agent");
+
+        let info = server.get_info().server_info;
+        assert_eq!(info.name, env!("CARGO_PKG_NAME"));
+        assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
+        assert_ne!(info.name, "rmcp");
     }
 }
