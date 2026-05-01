@@ -200,16 +200,19 @@ jobs:
         with:
           tool: nextest
 
+      # Use a folded scalar (no shell line-continuation) so we keep the runner's
+      # default shell on every OS. On Windows, `shell: bash` loads MSYS perl,
+      # which lacks Locale::Maketext::Simple and breaks josekit's vendored
+      # OpenSSL build; pwsh defaults find Strawberry Perl correctly.
       - name: Build and archive tests
-        shell: bash
-        run: |
-          cargo nextest archive \
-            --config-file .github/nextest.toml \
-            --cargo-profile ci \
-            --workspace \
-            --all-features \
-            --lib --bins --tests \
-            --archive-file nextest-archive.tar.zst
+        run: >-
+          cargo nextest archive
+          --config-file .github/nextest.toml
+          --cargo-profile ci
+          --workspace
+          --all-features
+          --lib --bins --tests
+          --archive-file nextest-archive.tar.zst
 
       - name: Upload test archive
         uses: actions/upload-artifact@v4
@@ -261,13 +264,12 @@ jobs:
           name: nextest-archive-${{ matrix.os }}
 
       - name: Run tests
-        shell: bash
-        run: |
-          cargo nextest run \
-            --config-file .github/nextest.toml \
-            --archive-file nextest-archive.tar.zst \
-            --workspace-remap . \
-            --profile ci
+        run: >-
+          cargo nextest run
+          --config-file .github/nextest.toml
+          --archive-file nextest-archive.tar.zst
+          --workspace-remap .
+          --profile ci
 
   # Coverage runs on master only — instrumented builds invalidate sccache hits
   # for normal builds, so we keep its target out of the shared cache.
