@@ -254,6 +254,8 @@ pub async fn update_cart_item(
         },
     };
 
+    crate::mcp::tools::validate_path_id(&params.item_id, "item_id")?;
+
     let request_body = UpdateCartItemRequest { quantity: params.quantity };
 
     let path = build_url_with_query(&format!("/cart/items/{}", params.item_id), &[
@@ -303,6 +305,8 @@ pub async fn remove_from_cart(
             platform: params.platform,
         },
     };
+
+    crate::mcp::tools::validate_path_id(&params.item_id, "item_id")?;
 
     let path = build_url_with_query(&format!("/cart/items/{}", params.item_id), &[
         ("cart_id", &params.cart_id),

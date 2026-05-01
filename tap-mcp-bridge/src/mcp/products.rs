@@ -287,6 +287,8 @@ pub async fn get_product_with<M: MerchantApi>(
         },
     };
 
+    crate::mcp::tools::validate_path_id(&params.product_id, "product_id")?;
+
     let path = build_url_with_query(&format!("/products/{}", params.product_id), &[(
         "consumer_id",
         &params.consumer_id,

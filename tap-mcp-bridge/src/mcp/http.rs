@@ -82,6 +82,32 @@ pub fn create_http_client() -> Result<Client> {
         .map_err(BridgeError::HttpError)
 }
 
+/// Rejects request paths that contain `.` or `..` segments.
+///
+/// `reqwest` (via `url::Url`) collapses these segments before transmitting the
+/// request, so a path like `/cart/items/../../admin` is signed verbatim but
+/// dispatched as `/admin`. Rebuilding `@path` from the wire request — what an
+/// RFC 9421 §2.2.6 conformant merchant does — yields a different value and
+/// signature verification fails. A loose merchant accepts the collapsed path
+/// and the bridge becomes an oracle for arbitrary endpoint targeting.
+///
+/// Caller validation of id fields ([`validate_path_id`]) is the primary defense.
+/// This check guards against future code paths that bypass that layer.
+///
+/// Only the path component is inspected; query strings are passed through
+/// unchanged.
+///
+/// [`validate_path_id`]: crate::mcp::tools::validate_path_id
+fn reject_path_traversal(path: &str) -> Result<()> {
+    let path_only = path.split_once('?').map_or(path, |(p, _)| p);
+    if path_only.split('/').any(|segment| segment == ".." || segment == ".") {
+        return Err(BridgeError::InvalidInput(format!(
+            "request path contains traversal segment: {path}"
+        )));
+    }
+    Ok(())
+}
+
 /// Validates a search or category parameter.
 ///
 /// # Requirements
@@ -139,6 +165,7 @@ pub async fn execute_tap_request_with_acro<T: Serialize>(
     request_body: Option<&T>,
 ) -> Result<Vec<u8>> {
     crate::mcp::tools::validate_consumer_id(consumer_id)?;
+    reject_path_traversal(path)?;
 
     let url = crate::mcp::tools::parse_merchant_url(merchant_url)?;
     let authority = url.host_str().ok_or_else(|| {
@@ -222,6 +249,7 @@ pub async fn execute_tap_request_with_custom_nonce<T: Serialize>(
     nonce: &str,
 ) -> Result<Vec<u8>> {
     crate::mcp::tools::validate_consumer_id(consumer_id)?;
+    reject_path_traversal(path)?;
 
     let url = crate::mcp::tools::parse_merchant_url(merchant_url)?;
     let authority = url.host_str().ok_or_else(|| {
@@ -489,5 +517,34 @@ mod tests {
         // Non-printable ASCII should fail
         let with_control = "hello\x01world";
         assert!(validate_search_param(with_control, "search").is_err());
+    }
+
+    #[test]
+    fn test_reject_path_traversal_accepts_normal_paths() {
+        assert!(reject_path_traversal("/cart/items/abc-123").is_ok());
+        assert!(reject_path_traversal("/orders/xyz?consumer_id=user-1").is_ok());
+        assert!(reject_path_traversal("/subscriptions/sub_1/cancel").is_ok());
+        assert!(reject_path_traversal("/").is_ok());
+    }
+
+    #[test]
+    fn test_reject_path_traversal_rejects_double_dot() {
+        let err = reject_path_traversal("/cart/items/../../admin").unwrap_err();
+        assert!(matches!(err, BridgeError::InvalidInput(msg) if msg.contains("traversal")));
+        assert!(reject_path_traversal("/orders/..").is_err());
+        assert!(reject_path_traversal("../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn test_reject_path_traversal_rejects_single_dot() {
+        assert!(reject_path_traversal("/cart/./items").is_err());
+        assert!(reject_path_traversal("/.").is_err());
+    }
+
+    #[test]
+    fn test_reject_path_traversal_inspects_only_path_component() {
+        // ".." inside a query value is not a path segment and must not trigger.
+        assert!(reject_path_traversal("/products?search=..").is_ok());
+        assert!(reject_path_traversal("/products?note=foo/../bar").is_ok());
     }
 }

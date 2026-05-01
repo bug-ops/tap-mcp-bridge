@@ -234,6 +234,8 @@ pub async fn get_order(signer: &TapSigner, params: GetOrderParams) -> Result<Ord
         },
     };
 
+    crate::mcp::tools::validate_path_id(&params.order_id, "order_id")?;
+
     let path = build_url_with_query(&format!("/orders/{}", params.order_id), &[(
         "consumer_id",
         &params.consumer_id,
