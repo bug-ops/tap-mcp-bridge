@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `TAP_ALLOW_LOOPBACK=1` developer escape hatch in `parse_merchant_url`: when set, the function accepts `http://localhost`, `http://127.0.0.1`, and their `https` counterparts so wiremock-style harnesses can drive the full request-response loop end to end. The override is scoped to loopback hosts — non-loopback `http://` URLs are still rejected — and is documented as dev-only; it must never be set in production (#126)
+
 ### Fixed
 
 - `tap-mcp-server` exited immediately after responding to `initialize`, dropping every subsequent request. Under rmcp 1.5, `Service::serve(transport)` resolves at initialization and returns a `RunningService` whose background task drives the request loop; the server now awaits `RunningService::waiting()` so the connection lives for its full lifetime (#118)
