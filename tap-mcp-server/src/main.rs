@@ -217,6 +217,20 @@ struct BrowseRequest {
     platform: String,
 }
 
+// `Parameters<()>` would make rmcp publish the input schema as `{"type":"null"}`,
+// but the dispatcher always feeds `{}` to the deserializer regardless of what the
+// client sent — so every standard MCP argument shape (`{}`, `null`, omitted) fails.
+// An empty struct produces `{"type":"object","properties":{},"required":[]}` instead,
+// which deserializes happily from `{}`. A unit struct (`struct EmptyRequest;`) would
+// derive a `null` JSON Schema and reproduce the original bug, so the brace-form is
+// load-bearing.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[allow(
+    clippy::empty_structs_with_brackets,
+    reason = "brace-form is required for derive(JsonSchema) to emit type:object"
+)]
+struct EmptyRequest {}
+
 /// TAP-MCP Server implementing MCP server handler.
 ///
 /// This server exposes TAP functionality as MCP tools for Claude Desktop.
@@ -335,7 +349,7 @@ impl TapMcpServer {
     #[instrument(skip(self, _params), fields(agent_id = %self.agent_id))]
     async fn verify_agent_identity(
         &self,
-        _params: Parameters<()>,
+        _params: Parameters<EmptyRequest>,
     ) -> Result<CallToolResult, McpError> {
         info!(tool = "verify_agent_identity", "processing health check");
 
@@ -557,5 +571,30 @@ mod tests {
         assert_eq!(info.name, env!("CARGO_PKG_NAME"));
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
         assert_ne!(info.name, "rmcp");
+    }
+
+    #[test]
+    fn test_verify_agent_identity_schema_is_object() {
+        // Regression for #120: `Parameters<()>` made the schema `{"type":"null"}`,
+        // which rmcp 1.5's dispatcher could not deserialize from any standard
+        // MCP argument shape. Empty struct must produce `{"type":"object"}`.
+        let signing_key = SigningKey::from_bytes(&[1u8; 32]);
+        let signer = TapSigner::new(signing_key, "test-agent", "https://agent.example.com");
+        let server = TapMcpServer::new(signer, "test-agent");
+
+        let tools = server.tool_router.list_all();
+        let verify = tools.iter().find(|t| t.name == "verify_agent_identity").expect("tool listed");
+        let schema = serde_json::to_value(&verify.input_schema).unwrap();
+        assert_eq!(schema.get("type").and_then(|v| v.as_str()), Some("object"));
+    }
+
+    #[test]
+    fn test_empty_request_deserializes_from_empty_map() {
+        // Regression for #120: rmcp's dispatcher feeds the JSON-RPC `arguments`
+        // (or `{}` if absent) to this type's deserializer. An empty map must
+        // succeed; that's the convention every MCP client uses for parameter-less
+        // tools. `null` and `arguments`-omitted are normalized by rmcp to `{}`
+        // before reaching us, so the e2e contract is covered by this single check.
+        assert!(serde_json::from_str::<EmptyRequest>("{}").is_ok());
     }
 }
