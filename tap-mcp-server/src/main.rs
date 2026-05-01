@@ -448,10 +448,16 @@ async fn main() -> Result<()> {
     // Serve on stdio transport with graceful shutdown
     let transport = transport::stdio();
 
-    // Run server with graceful shutdown
+    // `Service::serve` resolves once the service is initialized and returns a
+    // `RunningService` whose background task drives the request loop. Awaiting
+    // `serve` directly would race the loop and cause the binary to exit right
+    // after `initialize`, dropping every subsequent request.
+    let running = server.serve(transport).await.context("Server initialization failed")?;
+
     tokio::select! {
-        result = server.serve(transport) => {
-            result.context("Server execution failed")?;
+        result = running.waiting() => {
+            let quit_reason = result.context("Server task join failed")?;
+            info!(?quit_reason, "Server task finished");
         }
         _ = tokio::signal::ctrl_c() => {
             info!("Received shutdown signal (Ctrl+C)");
