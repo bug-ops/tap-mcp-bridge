@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tap-mcp-server` advertised itself as `rmcp/1.5.0` in the `initialize` response because rmcp's default `Implementation::from_build_env` captures `env!("CARGO_*")` inside the rmcp crate. `ServerHandler::get_info` is now overridden on `TapMcpServer` to return `tap-mcp-server` and the workspace version, giving MCP clients the correct identity (#117)
 - `verify_agent_identity` was uncallable from any MCP client. `Parameters<()>` made rmcp publish the input schema as `{"type":"null"}`, but rmcp 1.5's dispatcher feeds `{}` to the deserializer regardless of the client-sent argument shape, so `{}`, `null`, and omitted-arguments all failed with `-32602 invalid type: map, expected unit`. The tool now uses an empty `EmptyRequest` struct, producing `{"type":"object","properties":{}}` which deserializes happily from `{}` (#120)
 
+### Added
+
+- `tap-mcp-server` now exposes the full e-commerce flow as MCP tools, mirroring the library's public functions: `get_products`, `get_product`, `add_to_cart`, `get_cart`, `update_cart_item`, `remove_from_cart`, `create_order`, `get_order`, `process_payment`. Together with the existing `checkout_with_tap`, `browse_merchant`, `verify_agent_identity` the server now lists 12 tools (#121)
+
 ## [0.3.0] - 2026-05-01
 
 ### Added
