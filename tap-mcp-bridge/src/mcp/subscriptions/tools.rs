@@ -488,6 +488,8 @@ pub async fn get_subscription_plan(
         },
     };
 
+    crate::mcp::tools::validate_path_id(&params.plan_id, "plan_id")?;
+
     let path = build_url_with_query(&format!("/subscriptions/plans/{}", params.plan_id), &[(
         "consumer_id",
         &params.consumer_id,
@@ -621,6 +623,8 @@ pub async fn get_subscription(
         },
     };
 
+    crate::mcp::tools::validate_path_id(&params.subscription_id, "subscription_id")?;
+
     let path = build_url_with_query(&format!("/subscriptions/{}", params.subscription_id), &[(
         "consumer_id",
         &params.consumer_id,
@@ -679,6 +683,8 @@ pub async fn update_subscription(
             platform: params.platform,
         },
     };
+
+    crate::mcp::tools::validate_path_id(&params.subscription_id, "subscription_id")?;
 
     let request_body = UpdateSubscriptionRequest {
         quantity: params.quantity,
@@ -745,6 +751,8 @@ pub async fn cancel_subscription(
         },
     };
 
+    crate::mcp::tools::validate_path_id(&params.subscription_id, "subscription_id")?;
+
     let request_body = CancelSubscriptionRequest {
         cancel_at_period_end: params.cancel_at_period_end,
         reason: params.reason,
@@ -808,6 +816,8 @@ pub async fn pause_subscription(
         },
     };
 
+    crate::mcp::tools::validate_path_id(&params.subscription_id, "subscription_id")?;
+
     let request_body =
         PauseSubscriptionRequest { resume_at: params.resume_at, reason: params.reason };
 
@@ -866,6 +876,8 @@ pub async fn resume_subscription(
         },
     };
 
+    crate::mcp::tools::validate_path_id(&params.subscription_id, "subscription_id")?;
+
     let request_body = ResumeSubscriptionRequest { charge_immediately: params.charge_immediately };
 
     let path = build_url_with_query(
@@ -923,6 +935,8 @@ pub async fn report_usage(signer: &TapSigner, params: ReportUsageParams) -> Resu
         },
     };
 
+    crate::mcp::tools::validate_path_id(&params.subscription_id, "subscription_id")?;
+
     let request_body = ReportUsageRequest {
         metric_id: params.metric_id,
         quantity: params.quantity,
@@ -974,6 +988,8 @@ pub async fn get_usage(signer: &TapSigner, params: GetUsageParams) -> Result<Usa
             platform: params.platform,
         },
     };
+
+    crate::mcp::tools::validate_path_id(&params.subscription_id, "subscription_id")?;
 
     let path = build_url_with_query(
         &format!("/subscriptions/{}/usage/summary", params.subscription_id),
@@ -1040,6 +1056,8 @@ pub async fn update_payment_method(
 
     let request_body = UpdatePaymentMethodRequest { apc: apc_json };
 
+    crate::mcp::tools::validate_path_id(&params.subscription_id, "subscription_id")?;
+
     let path = build_url_with_query(
         &format!("/subscriptions/{}/payment-method", params.subscription_id),
         &[("consumer_id", &params.consumer_id)],
@@ -1096,6 +1114,8 @@ pub async fn preview_proration(
             platform: params.platform,
         },
     };
+
+    crate::mcp::tools::validate_path_id(&params.subscription_id, "subscription_id")?;
 
     let request_body = PreviewProrationRequest {
         target_plan_id: params.target_plan_id,

@@ -398,6 +398,36 @@ pub(crate) fn validate_consumer_id(consumer_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Validates a caller-supplied identifier that will be embedded as a URL
+/// path segment (`item_id`, `order_id`, `product_id`, `subscription_id`,
+/// `plan_id`).
+///
+/// Without validation, ids containing `..`, `/`, or other reserved characters
+/// cause the wire path produced by `reqwest`/`url::Url` to diverge from the
+/// signed RFC 9421 `@path` value: strict merchants reject the signature, and
+/// loose merchants execute the request against an attacker-chosen endpoint.
+/// The allowlist (ASCII alphanumeric, `-`, `_`, max 64 chars) matches
+/// [`validate_consumer_id`] and the typed `SubscriptionId`/`PlanId`
+/// constructors, so any value that survives validation is unambiguous as a
+/// single path segment.
+pub(crate) fn validate_path_id(id: &str, field: &str) -> Result<()> {
+    if id.is_empty() {
+        return Err(BridgeError::InvalidInput(format!("{field} cannot be empty")));
+    }
+
+    if id.len() > 64 {
+        return Err(BridgeError::InvalidInput(format!("{field} must be 64 characters or less")));
+    }
+
+    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err(BridgeError::InvalidInput(format!(
+            "{field} must contain only alphanumeric characters, hyphens, and underscores"
+        )));
+    }
+
+    Ok(())
+}
+
 /// Parses and validates merchant URL.
 ///
 /// Production policy rejects any URL that is not `https://` and any URL whose
@@ -632,5 +662,49 @@ mod tests {
         assert!(validate_consumer_id("abc123").is_ok());
         assert!(validate_consumer_id("ABC123").is_ok());
         assert!(validate_consumer_id("123456").is_ok());
+    }
+
+    // validate_path_id
+
+    #[test]
+    fn test_validate_path_id_accepts_allowlist() {
+        assert!(validate_path_id("item-123", "item_id").is_ok());
+        assert!(validate_path_id("sub_456", "subscription_id").is_ok());
+        assert!(validate_path_id("ABC123_abc-def", "plan_id").is_ok());
+    }
+
+    #[test]
+    fn test_validate_path_id_rejects_traversal_segments() {
+        let err = validate_path_id("../../admin", "item_id").unwrap_err();
+        assert!(matches!(err, BridgeError::InvalidInput(msg) if msg.contains("item_id")));
+        assert!(validate_path_id("..", "order_id").is_err());
+        assert!(validate_path_id(".", "order_id").is_err());
+    }
+
+    #[test]
+    fn test_validate_path_id_rejects_separators_and_query() {
+        assert!(validate_path_id("foo/bar", "item_id").is_err());
+        assert!(validate_path_id("foo?x=1", "item_id").is_err());
+        assert!(validate_path_id("foo#frag", "item_id").is_err());
+        assert!(validate_path_id("foo bar", "item_id").is_err());
+        assert!(validate_path_id("foo%2Fbar", "item_id").is_err());
+        assert!(validate_path_id("foo\nbar", "item_id").is_err());
+        assert!(validate_path_id("foo\0bar", "item_id").is_err());
+    }
+
+    #[test]
+    fn test_validate_path_id_empty() {
+        let err = validate_path_id("", "subscription_id").unwrap_err();
+        assert!(matches!(err, BridgeError::InvalidInput(msg) if msg.contains("subscription_id")));
+    }
+
+    #[test]
+    fn test_validate_path_id_length_boundary() {
+        let exactly_64 = "a".repeat(64);
+        assert!(validate_path_id(&exactly_64, "plan_id").is_ok());
+
+        let too_long = "a".repeat(65);
+        let err = validate_path_id(&too_long, "plan_id").unwrap_err();
+        assert!(matches!(err, BridgeError::InvalidInput(msg) if msg.contains("64")));
     }
 }
