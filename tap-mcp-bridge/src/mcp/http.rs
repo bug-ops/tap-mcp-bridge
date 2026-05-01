@@ -44,6 +44,25 @@ impl HttpMethod {
 /// Maximum length for search parameters (defense in depth).
 const MAX_SEARCH_PARAM_LENGTH: usize = 256;
 
+/// Composes the wire URL for a TAP request from a parsed base URL and a path.
+///
+/// `Url::Display` always emits a trailing slash for an origin with an empty
+/// path, so naively writing `format!("{url}{path}")` produces `https://host//path`
+/// when `path` itself begins with `/`. That mismatched wire path also breaks
+/// RFC 9421 verification on strict merchants because the signature is built
+/// against the input `path` (`/checkout`), not the doubled form.
+///
+/// This helper preserves the base URL's path prefix, if any, and ensures
+/// exactly one slash sits between the base and the appended path.
+pub(crate) fn compose_request_url(base: &Url, path: &str) -> String {
+    let base_str = base.as_str().trim_end_matches('/');
+    if path.starts_with('/') {
+        format!("{base_str}{path}")
+    } else {
+        format!("{base_str}/{path}")
+    }
+}
+
 /// Creates a configured HTTP client with connection pooling.
 ///
 /// Configuration:
@@ -142,7 +161,7 @@ pub async fn execute_tap_request_with_acro<T: Serialize>(
     let signature =
         signer.sign_request(method.as_str(), authority, path, &body, interaction_type)?;
 
-    let full_url = format!("{url}{path}");
+    let full_url = compose_request_url(&url, path);
     let request = match method {
         HttpMethod::Get => client.get(&full_url),
         HttpMethod::Post => client.post(&full_url),
@@ -222,7 +241,7 @@ pub async fn execute_tap_request_with_custom_nonce<T: Serialize>(
     let signature =
         signer.sign_request(method.as_str(), authority, path, &body, interaction_type)?;
 
-    let full_url = format!("{url}{path}");
+    let full_url = compose_request_url(&url, path);
     let request = match method {
         HttpMethod::Get => client.get(&full_url),
         HttpMethod::Post => client.post(&full_url),
@@ -306,6 +325,57 @@ mod tests {
     fn test_create_http_client() {
         let client = create_http_client();
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_compose_request_url_no_trailing_slash() {
+        let base = Url::parse("https://merchant.example.com").unwrap();
+        assert_eq!(
+            compose_request_url(&base, "/checkout"),
+            "https://merchant.example.com/checkout"
+        );
+    }
+
+    #[test]
+    fn test_compose_request_url_trailing_slash() {
+        let base = Url::parse("https://merchant.example.com/").unwrap();
+        assert_eq!(
+            compose_request_url(&base, "/checkout"),
+            "https://merchant.example.com/checkout"
+        );
+    }
+
+    #[test]
+    fn test_compose_request_url_preserves_path_prefix() {
+        let base = Url::parse("https://merchant.example.com/api/v1").unwrap();
+        assert_eq!(
+            compose_request_url(&base, "/checkout"),
+            "https://merchant.example.com/api/v1/checkout"
+        );
+    }
+
+    #[test]
+    fn test_compose_request_url_prefix_with_trailing_slash() {
+        let base = Url::parse("https://merchant.example.com/api/v1/").unwrap();
+        assert_eq!(
+            compose_request_url(&base, "/checkout"),
+            "https://merchant.example.com/api/v1/checkout"
+        );
+    }
+
+    #[test]
+    fn test_compose_request_url_path_without_leading_slash() {
+        let base = Url::parse("https://merchant.example.com").unwrap();
+        assert_eq!(compose_request_url(&base, "checkout"), "https://merchant.example.com/checkout");
+    }
+
+    #[test]
+    fn test_compose_request_url_with_query_string_in_path() {
+        let base = Url::parse("https://merchant.example.com").unwrap();
+        assert_eq!(
+            compose_request_url(&base, "/checkout?intent=payment"),
+            "https://merchant.example.com/checkout?intent=payment"
+        );
     }
 
     #[test]
