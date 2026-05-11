@@ -25,7 +25,7 @@ lru = "0.18"
 proptest = "1"
 reqwest = { version = "0.13", default-features = false }
 rmcp = "1.6"
-rust_decimal = "1.40"
+rust_decimal = "1.42"
 secrecy = "0.10"
 serde = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
