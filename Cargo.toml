@@ -14,7 +14,7 @@ repository = "https://github.com/bug-ops/tap-mcp-bridge"
 # Only versions are specified here; features are in crate-specific Cargo.toml files.
 [workspace.dependencies]
 anyhow = "1"
-aws-lc-rs = "1.16"
+aws-lc-rs = "1.17"
 base64 = "0.22"
 chrono = "0.4"
 criterion = "0.8"
