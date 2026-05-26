@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-26
+
 ### Added
 
 - `TAP_ALLOW_LOOPBACK=1` developer escape hatch in `parse_merchant_url`: when set, the function accepts `http://localhost`, `http://127.0.0.1`, and their `https` counterparts so wiremock-style harnesses can drive the full request-response loop end to end. The override is scoped to loopback hosts — non-loopback `http://` URLs are still rejected — and is documented as dev-only; it must never be set in production (#126)
@@ -45,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tap-mcp-server` now exposes the full e-commerce flow as MCP tools, mirroring the library's public functions: `get_products`, `get_product`, `add_to_cart`, `get_cart`, `update_cart_item`, `remove_from_cart`, `create_order`, `get_order`, `process_payment`. Together with the existing `checkout_with_tap`, `browse_merchant`, `verify_agent_identity` the server now lists 12 tools (#121)
 
 ## [0.3.0] - 2026-05-01
+
 
 ### Added
 
@@ -317,7 +320,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.2.0
 [0.1.2]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.1.2
