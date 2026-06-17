@@ -1129,12 +1129,16 @@ impl ServerHandler for TapMcpServer {
         ))
     }
 
-    async fn list_tools(
+    fn list_tools(
         &self,
         _pagination: Option<PaginatedRequestParams>,
         _ctx: RequestContext<RoleServer>,
-    ) -> Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult { tools: self.tool_router.list_all(), next_cursor: None, meta: None })
+    ) -> impl Future<Output = Result<ListToolsResult, McpError>> {
+        std::future::ready(Ok(ListToolsResult {
+            tools: self.tool_router.list_all(),
+            next_cursor: None,
+            meta: None,
+        }))
     }
 
     async fn call_tool(
