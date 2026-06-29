@@ -2317,7 +2317,7 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
 name = "tap-mcp-bridge"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "aws-lc-rs",
  "base64",
@@ -2348,7 +2348,7 @@ dependencies = [
 
 [[package]]
 name = "tap-mcp-server"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "ed25519-dalek",

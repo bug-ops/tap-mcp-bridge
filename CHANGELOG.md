@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-29
+
+### Fixed
+
+- Remove unused `async` from `list_tools` trait impl in `tap-mcp-server` (#192)
+
+### Changed
+
+#### Dependencies
+
+- `rmcp` 1.7.0 → 1.8.0
+- `ed25519-dalek` 3.0.0-pre.7 → 3.0.0-rc.1 (via two consecutive Dependabot bumps: #172, #183)
+- `reqwest` 0.13.3 → 0.13.4; `hyper` 1.9.0 → 1.10.1 (#173)
+- `bytes` 1.11.1 → 1.12.0 (#184); `bitvec` 1.0.1 → 1.1.1 (#185); `borsh` 1.6.1 → 1.7.0 (#186)
+- Security-update sweeps: `anyhow` 1.0.102 → 1.0.103, `hybrid-array` 0.4.12 → 0.4.13, `rustls` 0.23.40 → 0.23.41 (#189)
+- Security-update sweeps: `arrayvec` 0.7.6 → 0.7.7, `quinn`/`quinn-proto` 0.11.9 → 0.11.11, `time` 0.3.49 → 0.3.51, `log` 0.4.30 → 0.4.33, `cc` 1.2.62 → 1.2.65 (#179, #188)
+- Security-update sweeps: `chrono` 0.4.44 → 0.4.45, `h2` 0.4.14 → 0.4.15, `http` 1.4.0 → 1.4.2, `memchr` 2.8.0 → 2.8.2, `mio` 1.2.0 → 1.2.1, `rust_decimal` 1.42.0 → 1.42.1, and 15 further transitive updates (#179)
+- `uuid` 1.23.1 → 1.23.4 (dev dep, via #174, #191)
+
+#### CI
+
+- `actions/checkout` v6 → v7 (#181)
+- `codecov/codecov-action` v6 → v7 (#175)
+- `lewagon/wait-on-check-action` bump (#177)
+
 ## [0.3.1] - 2026-05-26
 
 ### Added
@@ -320,7 +345,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bug-ops/tap-mcp-bridge/releases/tag/v0.2.0
