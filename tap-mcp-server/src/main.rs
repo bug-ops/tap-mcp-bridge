@@ -42,7 +42,7 @@ use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
     handler::server::{tool::ToolRouter, wrapper::Parameters},
     model::{
-        CallToolRequestParams, CallToolResult, Content, Implementation, ListToolsResult,
+        CallToolRequestParams, CallToolResult, ContentBlock, Implementation, ListToolsResult,
         PaginatedRequestParams, ServerInfo,
     },
     schemars,
@@ -725,7 +725,7 @@ impl TapMcpServer {
         info!(status = %result.status, "checkout completed successfully");
 
         // Return result
-        Ok(CallToolResult::success(vec![Content::text(format!(
+        Ok(CallToolResult::success(vec![ContentBlock::text(format!(
             "Status: {}\nMessage: {}",
             result.status, result.message
         ))]))
@@ -762,7 +762,7 @@ impl TapMcpServer {
         info!(status = %result.status, "browse completed successfully");
 
         // Return result
-        Ok(CallToolResult::success(vec![Content::text(format!(
+        Ok(CallToolResult::success(vec![ContentBlock::text(format!(
             "Status: {}\nData: {}",
             result.status, result.data
         ))]))
@@ -799,7 +799,7 @@ impl TapMcpServer {
         let json = serde_json::to_string(&catalog).map_err(|e| {
             McpError::internal_error(format!("catalog serialization failed: {e}"), None)
         })?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 
     /// Retrieve a single product
@@ -830,7 +830,7 @@ impl TapMcpServer {
         let json = serde_json::to_string(&product).map_err(|e| {
             McpError::internal_error(format!("product serialization failed: {e}"), None)
         })?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 
     /// Add an item to a cart
@@ -864,7 +864,7 @@ impl TapMcpServer {
         let json = serde_json::to_string(&cart).map_err(|e| {
             McpError::internal_error(format!("cart serialization failed: {e}"), None)
         })?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 
     /// Get current cart state
@@ -895,7 +895,7 @@ impl TapMcpServer {
         let json = serde_json::to_string(&cart).map_err(|e| {
             McpError::internal_error(format!("cart serialization failed: {e}"), None)
         })?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 
     /// Update the quantity of a cart item
@@ -928,7 +928,7 @@ impl TapMcpServer {
         let json = serde_json::to_string(&cart).map_err(|e| {
             McpError::internal_error(format!("cart serialization failed: {e}"), None)
         })?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 
     /// Remove an item from a cart
@@ -960,7 +960,7 @@ impl TapMcpServer {
         let json = serde_json::to_string(&cart).map_err(|e| {
             McpError::internal_error(format!("cart serialization failed: {e}"), None)
         })?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 
     /// Create an order from a cart
@@ -995,7 +995,7 @@ impl TapMcpServer {
         let json = serde_json::to_string(&order).map_err(|e| {
             McpError::internal_error(format!("order serialization failed: {e}"), None)
         })?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 
     /// Retrieve an order
@@ -1026,7 +1026,7 @@ impl TapMcpServer {
         let json = serde_json::to_string(&order).map_err(|e| {
             McpError::internal_error(format!("order serialization failed: {e}"), None)
         })?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 
     /// Process a payment for an order (sensitive fields encrypted into APC)
@@ -1062,7 +1062,7 @@ impl TapMcpServer {
         let json = serde_json::to_string(&result).map_err(|e| {
             McpError::internal_error(format!("payment result serialization failed: {e}"), None)
         })?;
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 
     /// Verify agent identity and report health status
@@ -1113,7 +1113,7 @@ impl TapMcpServer {
 
         info!(status = %report.status.as_str(), uptime_secs, "health check completed");
 
-        Ok(CallToolResult::success(vec![Content::text(json)]))
+        Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
     }
 }
 
