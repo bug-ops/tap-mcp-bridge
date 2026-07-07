@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Suppress deprecation error on `AtomicU64::fetch_update` in `security::rate_limit` — its replacement `try_update` (rust-lang/rust#135894) is not yet stable on the project's MSRV, and `-D warnings` was failing the build under newer toolchains
 
+### Changed
+
+#### Dependencies
+
+- `rmcp` 1.8.0 → 2.1.0 (#197). `rmcp`'s model types were realigned with the MCP 2025-11-25 spec; `tap-mcp-server` updated its single affected import from `rmcp::model::Content` to the renamed `ContentBlock` (same API, no behavior change — verified via a stdio `initialize`/`tools/list` smoke test)
+
 ## [0.3.2] - 2026-06-29
 
 ### Fixed
