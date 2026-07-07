@@ -279,6 +279,11 @@ impl RateLimiter {
             let max_tokens = u64::from(self.config.burst_size) * 1000;
 
             // Add tokens up to the maximum
+            #[allow(
+                deprecated,
+                reason = "try_update (rust-lang/rust#135894) is unstable on our MSRV; \
+                          fetch_update is the only stable option until it lands"
+            )]
             self.tokens
                 .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
                     Some(current.saturating_add(tokens_to_add).min(max_tokens))
