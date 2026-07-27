@@ -20,7 +20,7 @@ chrono = "0.4"
 criterion = "0.8"
 ed25519-dalek = "3.0.0-rc.0"
 hex = "0.4"
-jsonwebtoken = "10"
+jsonwebtoken = "11"
 lru = "0.18"
 proptest = "1"
 reqwest = { version = "0.13", default-features = false }
