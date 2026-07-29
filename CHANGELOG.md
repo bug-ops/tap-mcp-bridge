@@ -7,15 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-07-29
+
 ### Fixed
 
-- Suppress deprecation error on `AtomicU64::fetch_update` in `security::rate_limit` — its replacement `try_update` (rust-lang/rust#135894) is not yet stable on the project's MSRV, and `-D warnings` was failing the build under newer toolchains
+- Suppress deprecation error on `AtomicU64::fetch_update` in `security::rate_limit` — its replacement `try_update` (rust-lang/rust#135894) is not yet stable on the project's MSRV, and `-D warnings` was failing the build under newer toolchains (#200)
+- Bump `crossbeam-epoch` to 0.9.20 for RUSTSEC-2026-0204 (invalid pointer dereference in `fmt::Display` impls); pulled in transitively via the `criterion` dev-dependency, no source changes needed (#200)
 
 ### Changed
 
 #### Dependencies
 
-- `rmcp` 1.8.0 → 2.1.0 (#197). `rmcp`'s model types were realigned with the MCP 2025-11-25 spec; `tap-mcp-server` updated its single affected import from `rmcp::model::Content` to the renamed `ContentBlock` (same API, no behavior change — verified via a stdio `initialize`/`tools/list` smoke test)
+- `rmcp` 1.8.0 → 2.1.0 → 2.2.0 (#197, #205). The 2.1.0 jump realigned `rmcp`'s model types with the MCP 2025-11-25 spec; `tap-mcp-server` updated its single affected import from `rmcp::model::Content` to the renamed `ContentBlock` (same API, no behavior change — verified via a stdio `initialize`/`tools/list` smoke test). The 2.2.0 follow-up was a routine minor bump with no source impact
+- `jsonwebtoken` 10.4.0 → 11.0.0 (#222), dependency-only major bump — no source changes required
+- `ed25519-dalek` 3.0.0-rc.1 → 3.0.0 stable (#201)
+- `tokio` 1.52.3 → 1.53.1; `tokio-util` 0.7.18 → 0.7.19; `futures`/`futures-*` 0.3.32 → 0.3.33; `async-trait` 0.1.89 → 0.1.91; `tokio-macros` 2.7.0 → 2.7.1 (#211, #219)
+- `hyper` 1.10.1 → 1.11.0 (#220)
+- `serde` 1.0.228 → 1.0.229; `serde_json` 1.0.150 → 1.0.151; `serde_core`/`serde_derive` 1.0.228 → 1.0.229 (#212)
+- `aws-lc-rs` 1.17.0 → 1.17.3 (#201, #213)
+- `uuid` 1.23.4 → 1.24.0 (dev dep, #206, #214)
+- `thiserror` 2.0.18 → 2.0.19 (#214)
+- `lru` 0.18.0 → 0.18.1 (#204)
+- `either` 1.16.0 → 1.17.0 (#221)
+- `rustls-pki-types` 1.14.1 → 1.15.1; `rustls` 0.23.41 → 0.23.42 (#209, #210, #218)
+- `rmcp-macros` 2.1.0 → 2.2.0 (#208)
+- `toml`/`toml_edit`/`toml_writer` and `time`/`time-macros` security-update sweeps (#210)
+- `clap`/`clap_builder` 4.6.0 → 4.6.4; `libc` 0.2.186 → 0.2.189; `zerocopy`/`zerocopy-derive` 0.8.52 → 0.8.55 (#203, #210, #218)
+- Further transitive security-update sweeps: `arrayvec`, `bitflags`, `bytes`, `cc`, `cfg_aliases`, `crossbeam-deque`, `crossbeam-utils`, `jobserver`, `memchr`, `mio`, `num-bigint`, `proc-macro2`, `quinn`/`quinn-proto`/`quinn-udp`, `quote`, `rand`, `ref-cast`/`ref-cast-impl`, `regex-automata`, `rustc-hash`, `rustversion`, `simd_cesu8`, `socket2`, `thread_local`, `webpki-root-certs`, `winnow`, `zmij` (#198, #199, #203, #204, #207, #210, #215)
+
+#### CI
+
+- `actions/labeler` v6 → v7 (#217)
+- `lewagon/wait-on-check-action` 1.8.0 → 1.9.0 (#194, #216)
 
 ## [0.3.2] - 2026-06-29
 
@@ -355,7 +378,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/bug-ops/tap-mcp-bridge/compare/v0.2.0...v0.3.0

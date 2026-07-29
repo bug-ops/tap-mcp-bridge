@@ -164,7 +164,7 @@ let transport = HttpTransport::with_config(&config)?;
 - **Rate limiting** — Token bucket algorithm for request throttling
 - **Audit logging** — Structured security events with sensitive data redaction
 - **Prometheus metrics** — Request counters, error rates, latency tracking
-- **Replay protection** — UUID v4 nonce with LRU cache validation
+- **Replay protection** — UUID v4 nonce with TTL-driven, fail-closed cache validation
 
 ### Security
 
