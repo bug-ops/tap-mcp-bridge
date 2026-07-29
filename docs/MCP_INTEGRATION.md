@@ -309,7 +309,7 @@ async fn checkout_with_tap(signer: &TapSigner, params: CheckoutParams) -> Result
     // 5. Convert response to MCP format
     Ok(ToolResult {
         content: vec![
-            Content::text(format!("Checkout completed: {:?}", response.json()))
+            ContentBlock::text(format!("Checkout completed: {:?}", response.json()))
         ]
     })
 }
