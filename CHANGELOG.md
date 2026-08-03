@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### Dependencies
+
+- `rmcp` 2.2.0 → 3.1.0 (#226). MCP 2026-07-28 / SEP-2322 (Multi Round-Trip Requests) changed `ServerHandler::call_tool` to return `CallToolResponse` instead of `CallToolResult`; `TapMcpServer::call_tool` now returns `CallToolResponse` (the tool router's result converts via `From<CallToolResult>`, so individual tool handlers are unaffected). SEP-2549 (list-result caching) added `ttl_ms` and `cache_scope` fields to `ListToolsResult`; `list_tools` now builds it via `ListToolsResult::with_all_items` instead of a manual struct literal
+- Removed the `cargo-deny` advisory ignore for RUSTSEC-2024-0436 (unmaintained `paste` crate) — the crate has left the dependency tree entirely since `rmcp` 3.x switched to `pastey`
+
 ## [0.3.3] - 2026-07-29
 
 ### Fixed
