@@ -24,7 +24,7 @@ jsonwebtoken = "11"
 lru = "0.18"
 proptest = "1"
 reqwest = { version = "0.13", default-features = false }
-rmcp = "2.1"
+rmcp = "3.0"
 rust_decimal = "1.42"
 secrecy = "0.10"
 serde = "1"
