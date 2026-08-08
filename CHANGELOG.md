@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+#### Lints
+
+- `unsafe_code` is now `deny` at the workspace level (`Cargo.toml` `[workspace.lints.rust]`) instead of being unrestricted. The sole existing `unsafe` block (a test-only `std::env::set_var`/`remove_var` sequence in `tap-mcp-server/src/observability.rs`) now carries a scoped `#[allow(unsafe_code, reason = "...")]` on the test function alongside its existing `SAFETY` comment. Any future `unsafe` usage requires the same point exception plus justification — see `CLAUDE.md` Conventions.
+
 #### Dependencies
 
 - `rmcp` 2.2.0 → 3.1.0 (#226). MCP 2026-07-28 / SEP-2322 (Multi Round-Trip Requests) changed `ServerHandler::call_tool` to return `CallToolResponse` instead of `CallToolResult`; `TapMcpServer::call_tool` now returns `CallToolResponse` (the tool router's result converts via `From<CallToolResult>`, so individual tool handlers are unaffected). SEP-2549 (list-result caching) added `ttl_ms` and `cache_scope` fields to `ListToolsResult`; `list_tools` now builds it via `ListToolsResult::with_all_items` instead of a manual struct literal
