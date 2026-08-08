@@ -681,7 +681,7 @@ mod tests {
         let PaymentMethod::Card(data) = payment_method else {
             unreachable!("expected Card variant");
         };
-        assert!(data.cvv.is_empty());
+        assert_eq!(data.cvv, "");
     }
 
     #[test]

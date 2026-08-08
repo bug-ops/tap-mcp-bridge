@@ -370,7 +370,7 @@ mod tests {
         assert_eq!(acro.id_token, "test.id.token");
         assert_eq!(acro.kid, "test-kid");
         assert_eq!(acro.alg, "ed25519");
-        assert!(!acro.signature.is_empty());
+        assert_ne!(acro.signature, "");
     }
 
     #[test]
@@ -380,7 +380,7 @@ mod tests {
             Acro::create("nonce", "token", create_test_contextual_data(), "kid", &signing_key)
                 .unwrap();
 
-        assert!(!acro.signature.is_empty());
+        assert_ne!(acro.signature, "");
         // Base64url encoded Ed25519 signature should be ~86 characters (64 bytes)
         assert!(acro.signature.len() > 80);
     }

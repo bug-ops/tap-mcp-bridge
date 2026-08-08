@@ -515,7 +515,7 @@ mod tests {
     fn test_merchant_config_default() {
         let config = MerchantConfig::default();
         assert_eq!(config.name, "Default Merchant");
-        assert!(config.base_url.is_empty());
+        assert_eq!(config.base_url, "");
     }
 
     #[test]

@@ -628,8 +628,8 @@ mod tests {
             phone: None,
         };
 
-        assert!(address.name.is_empty());
-        assert!(address.street.is_empty());
+        assert_eq!(address.name, "");
+        assert_eq!(address.street, "");
     }
 
     #[test]

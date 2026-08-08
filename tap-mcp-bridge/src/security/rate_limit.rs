@@ -871,8 +871,8 @@ mod tests {
         assert_ne!(sig1.signature, sig2.signature);
 
         // But both should be valid signatures
-        assert!(!sig1.signature.is_empty());
-        assert!(!sig2.signature.is_empty());
+        assert_ne!(sig1.signature, "");
+        assert_ne!(sig2.signature, "");
     }
 
     #[tokio::test]

@@ -470,7 +470,7 @@ mod tests {
         let signer = TapSigner::new(signing_key, "test-agent", "https://test.com");
 
         let keyid = signer.compute_keyid();
-        assert!(!keyid.is_empty());
+        assert_ne!(keyid, "");
         assert_eq!(keyid.len(), 43);
     }
 
@@ -917,7 +917,7 @@ mod tests {
         assert_eq!(acro.nonce, "nonce-789");
         assert_eq!(acro.id_token, id_token.token);
         assert_eq!(acro.alg, "ed25519");
-        assert!(!acro.signature.is_empty());
+        assert_ne!(acro.signature, "");
     }
 
     #[test]

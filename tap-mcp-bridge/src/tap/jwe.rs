@@ -397,7 +397,7 @@ mod tests {
         let (key, priv_key) = generate_test_keypair();
         let jwe = key.encrypt_compact(b"").expect("encrypt empty");
         let decrypted = decrypt_compact(&jwe, &priv_key);
-        assert!(decrypted.is_empty());
+        assert_eq!(decrypted, [] as [u8; 0]);
     }
 
     #[test]

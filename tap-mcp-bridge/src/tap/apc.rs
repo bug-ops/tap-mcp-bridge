@@ -658,7 +658,7 @@ mwIDAQAB
         assert_eq!(apc.encrypted_payment_data, "encrypted-data");
         assert_eq!(apc.kid, "test-kid");
         assert_eq!(apc.alg, "ed25519");
-        assert!(!apc.signature.is_empty());
+        assert_ne!(apc.signature, "");
     }
 
     #[test]
@@ -666,7 +666,7 @@ mwIDAQAB
         let signing_key = SigningKey::from_bytes(&[0u8; 32]);
         let apc = Apc::create("nonce", "encrypted", "kid", &signing_key).unwrap();
 
-        assert!(!apc.signature.is_empty());
+        assert_ne!(apc.signature, "");
         // Base64url encoded Ed25519 signature should be ~86 characters (64 bytes)
         assert!(apc.signature.len() > 80);
     }
@@ -949,7 +949,7 @@ mwIDAQAB
         let encrypted = payment.encrypt(&merchant_key);
         assert!(encrypted.is_ok());
         let encrypted = encrypted.unwrap();
-        assert!(!encrypted.is_empty());
+        assert_ne!(encrypted, "");
         // Verify JWE format (5 dot-separated parts)
         assert_eq!(encrypted.split('.').count(), 5);
     }

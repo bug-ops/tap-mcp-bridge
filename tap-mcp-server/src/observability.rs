@@ -431,6 +431,11 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(
+        unsafe_code,
+        reason = "std::env::set_var/remove_var are unsafe in Edition 2024; this test-only \
+                  mutation of a test-specific env var is isolated and documented below"
+    )]
     fn test_log_format_from_env() {
         // SAFETY: This test runs in isolation and only modifies test-specific environment
         // variables. The LOG_FORMAT variable is only used by this test and doesn't affect
