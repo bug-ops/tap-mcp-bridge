@@ -296,8 +296,8 @@ mod tests {
         assert_eq!(jwk.crv, "Ed25519");
         assert_eq!(jwk.alg, "EdDSA");
         assert_eq!(jwk.key_use, "verify");
-        assert!(!jwk.x.is_empty());
-        assert!(!jwk.kid.is_empty());
+        assert_ne!(jwk.x, "");
+        assert_ne!(jwk.kid, "");
         assert_eq!(jwk.kid.len(), 43, "SHA-256 base64url is 43 chars");
     }
 
@@ -337,7 +337,7 @@ mod tests {
         let jwk = Jwk::from_verifying_key(&verifying_key);
 
         let thumbprint = jwk.compute_thumbprint();
-        assert!(!thumbprint.is_empty());
+        assert_ne!(thumbprint, "");
         assert_eq!(thumbprint.len(), 43, "SHA-256 base64url is 43 chars");
 
         // Verify thumbprint matches kid

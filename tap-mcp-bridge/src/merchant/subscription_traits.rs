@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn test_plan_query_params_default() {
         let params = PlanQueryParams::default();
-        assert!(params.consumer_id.is_empty());
+        assert_eq!(params.consumer_id, "");
         assert!(params.billing_cycle.is_none());
         assert!(params.pricing_type.is_none());
         assert!(!params.include_inactive);

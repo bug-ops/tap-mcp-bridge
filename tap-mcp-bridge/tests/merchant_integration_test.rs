@@ -180,7 +180,7 @@ fn test_merchant_with_product_query_params() {
 
     // Endpoint resolver should handle params (even if not used in default implementation)
     let endpoint = resolver.products_endpoint(&params);
-    assert!(!endpoint.is_empty());
+    assert_ne!(endpoint, "");
 }
 
 #[test]
