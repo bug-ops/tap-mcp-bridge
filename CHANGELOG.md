@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Moved the SDD spec archive from the untracked `.local/specs/` working folder to a
+  git-tracked top-level `specs/` directory, mirroring the convention used by sibling
+  projects (zeph, exarch, mcp-execution). All 11 existing specs (`001`–`011`) and
+  `MOC-specs.md` moved as-is, with internal `.local/specs/` path references updated to
+  `specs/`. `.local/specs/` remains reserved for scratch/working documents per this
+  project's convention; durable specs now live in `specs/` and are part of the repo history
+
 #### Lints
 
 - `unsafe_code` is now `deny` at the workspace level (`Cargo.toml` `[workspace.lints.rust]`) instead of being unrestricted. The sole existing `unsafe` block (a test-only `std::env::set_var`/`remove_var` sequence in `tap-mcp-server/src/observability.rs`) now carries a scoped `#[allow(unsafe_code, reason = "...")]` on the test function alongside its existing `SAFETY` comment. Any future `unsafe` usage requires the same point exception plus justification — see `CLAUDE.md` Conventions.
