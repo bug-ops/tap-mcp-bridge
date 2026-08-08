@@ -1,8 +1,19 @@
 # Map of Content — Specifications
 
-Living index of specs under `specs/`. Each spec corresponds to a
-non-trivial finding (P0–P2 bug, enhancement, research gap) and is the source
-of truth for the WHAT and WHY; `/sdd plan` artefacts capture the HOW.
+Living index of specs under `specs/`. Two categories of spec live here:
+
+- **Finding specs (001–011)**: each corresponds to a non-trivial finding
+  (P0–P2 bug, enhancement, research gap) and is the source of truth for the
+  WHAT and WHY; `/sdd plan` artefacts capture the HOW.
+- **Subsystem specs (012–020)**: document the current, as-built behavior of
+  each logical subsystem tracked in
+  `.claude/rules/continuous-improvement.md` § Project Subsystems. They were
+  authored to close a coverage gap — the finding specs are point fixes, not
+  a comprehensive record of what the system does — and describe existing,
+  tested code rather than proposing new work. See each subsystem spec's own
+  `[!note]` callout for this framing.
+
+## Finding Specs
 
 | Spec | Title | Priority | Status | Discovered |
 |------|-------|---------|--------|-----------|
@@ -21,3 +32,23 @@ of truth for the WHAT and WHY; `/sdd plan` artefacts capture the HOW.
 Note: #149 (TAP_AGENT_DIRECTORY validator gaps) had no separate spec — the issue body covered it. Closed by #152 in cycle 21.
 
 Note: #150 (TOML validator bundle) had no separate spec — issue body covered the four validator sections. Closed by #154 in cycle 23 via shared `validate_https_url` helper + extended endpoint-path checks.
+
+## Subsystem Specs
+
+| Spec | Subsystem | Status | Discovered |
+|------|-----------|--------|-----------|
+| [012](012-tap-protocol-implementation/spec.md) | `tap` — RFC 9421 signatures, JWK/JWT, ACRO/APC | Documented (as-built) | Specs migration, 2026-08-08 |
+| [013](013-jwe-encryption/spec.md) | `jwe` — RFC 7516 compact serialization for APC | Documented (as-built) | Specs migration, 2026-08-08 |
+| [014](014-mcp-tool-surface/spec.md) | `mcp` — TAP operations exposed as callable tools | Documented (as-built) | Specs migration, 2026-08-08 |
+| [015](015-merchant-abstraction/spec.md) | `merchant` — `MerchantApi` abstraction + TOML config | Documented (as-built) | Specs migration, 2026-08-08 |
+| [016](016-transport-layer/spec.md) | `transport` — sealed HTTP transport abstraction | Documented (as-built) | Specs migration, 2026-08-08 |
+| [017](017-reliability-patterns/spec.md) | `reliability` — retry with backoff, circuit breaker | Documented (as-built) | Specs migration, 2026-08-08 |
+| [018](018-security-hardening/spec.md) | `security` — rate limiting, audit logging | Documented (as-built) | Specs migration, 2026-08-08 |
+| [019](019-observability/spec.md) | `observability` — logging, health checks, metrics (`tap-mcp-server`) | Documented (as-built; metrics unwired) | Specs migration, 2026-08-08 |
+| [020](020-tap-mcp-server-binary/spec.md) | `tap-mcp-server` — MCP stdio server binary | Documented (as-built) | Specs migration, 2026-08-08 |
+
+No root-level BRD/SRS/NFR was added: `README.md` and `tap-mcp-bridge/src/lib.rs`'s
+module-level rustdoc already cover product-level WHAT/WHY at a level judged
+sufficient; a redundant BRD was not deemed to add value. Likewise, no
+`constitution.md`/`TEMPLATE.md`/`ARCHITECTURE.md` was copied from sibling
+projects — none of that content currently exists in this repo to migrate.

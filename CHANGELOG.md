@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MOC-specs.md` moved as-is, with internal `.local/specs/` path references updated to
   `specs/`. `.local/specs/` remains reserved for scratch/working documents per this
   project's convention; durable specs now live in `specs/` and are part of the repo history
+- Added 9 subsystem specs (`012`–`020`) documenting the current, as-built behavior of
+  every logical subsystem tracked in `.claude/rules/continuous-improvement.md` §
+  Project Subsystems (`tap`, `jwe`, `mcp`, `merchant`, `transport`, `reliability`,
+  `security`, `observability`, `tap-mcp-server`), none of which previously had
+  dedicated spec coverage — the existing 11 specs are individual bug-fix/finding
+  specs, not subsystem-level documentation. These specs describe existing, tested
+  code; they do not propose new functionality
 
 #### Lints
 
