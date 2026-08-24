@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Pin `rust-toolchain.toml` to `nightly-2026-08-14` instead of the floating `nightly` channel — a later nightly (rustc 1.100.0-nightly, 2026-08-21) hit an internal compiler error (`unexpected rigid alias in layout_of after normalization`) in clippy's `large_futures` pass on this codebase's async fns with opaque return types, failing `cargo clippy --all-targets --all-features -- -D warnings` workspace-wide
+
 ### Changed
 
 - Moved the SDD spec archive from the untracked `.local/specs/` working folder to a
