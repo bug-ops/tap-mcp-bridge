@@ -43,7 +43,7 @@ use rmcp::{
     handler::server::{tool::ToolRouter, wrapper::Parameters},
     model::{
         CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-        ListToolsResult, PaginatedRequestParams, ServerInfo,
+        ListToolsResult, PaginatedRequestParams, ServerConfig,
     },
     schemars,
     schemars::JsonSchema,
@@ -1118,12 +1118,12 @@ impl TapMcpServer {
 }
 
 impl ServerHandler for TapMcpServer {
-    fn get_info(&self) -> ServerInfo {
-        // Default `ServerInfo` reports `rmcp` / rmcp's own version, because
+    fn get_info(&self) -> ServerConfig {
+        // Default `ServerConfig` reports `rmcp` / rmcp's own version, because
         // `Implementation::from_build_env` captures `env!("CARGO_*")` inside
         // the rmcp crate. Override with this binary's identity so MCP clients
         // see `tap-mcp-server` instead of the framework name.
-        ServerInfo::default().with_server_info(Implementation::new(
+        ServerConfig::default().with_server_info(Implementation::new(
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
         ))
