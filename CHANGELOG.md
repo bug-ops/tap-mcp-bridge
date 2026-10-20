@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Bump `rustls` to 0.23.46, `rustls-webpki` to 0.103.16, `webpki-root-certs` to 1.0.10 to clear RUSTSEC-2026-0382/0383 and the rustls resumption advisory failing the Security Audit job
 - Pin `rust-toolchain.toml` to `nightly-2026-08-14` instead of the floating `nightly` channel — a later nightly (rustc 1.100.0-nightly, 2026-08-21) hit an internal compiler error (`unexpected rigid alias in layout_of after normalization`) in clippy's `large_futures` pass on this codebase's async fns with opaque return types, failing `cargo clippy --all-targets --all-features -- -D warnings` workspace-wide
 
 ### Changed
