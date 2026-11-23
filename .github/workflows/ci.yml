@@ -172,6 +172,10 @@ jobs:
     env:
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: "true"
+      # Skip the startup .sccache_check probe: sccache >=0.20.0 retries GHA
+      # cache temporary errors up to 6x/8s, which can exceed its 10s daemon
+      # startup timeout when parallel jobs contend on the GHA cache service.
+      SCCACHE_SKIP_CACHE_CHECK: "true"
     steps:
       - uses: actions/checkout@v7
 
@@ -234,6 +238,7 @@ jobs:
     env:
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_SKIP_CACHE_CHECK: "true"
     steps:
       - uses: actions/checkout@v7
 
@@ -313,6 +318,7 @@ jobs:
     env:
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_SKIP_CACHE_CHECK: "true"
       # -D warnings would promote workspace lints to errors during the
       # instrumented build; linting is enforced by the `check` job.
       RUSTFLAGS: ""
